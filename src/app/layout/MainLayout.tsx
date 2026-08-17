@@ -3,7 +3,6 @@ import {
   MessageSquare,
   FileText,
   Database,
-  User,
   Sun,
   Moon,
   LogOut,
@@ -21,13 +20,12 @@ import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from '@/shar
 import { useTheme } from '@/shared/hooks/useTheme'
 import { useAuth } from '@/features/auth/hooks/useAuth'
 import { cn } from '@/shared/lib/utils'
-import { LayoutContext } from './LayoutContext'
+import { ChatSessionPanel } from './components/ChatSessionPanel'
 
 const navItems = [
   { path: '/chat', label: '智能问答', icon: MessageSquare },
   { path: '/document/list', label: '文档管理', icon: FileText },
   { path: '/document/struct', label: '结构化数据', icon: Database },
-  { path: '/user/profile', label: '个人中心', icon: User },
 ]
 
 export default function MainLayout() {
@@ -37,27 +35,41 @@ export default function MainLayout() {
   const { logout, userInfo } = useAuth()
   const [collapsed, setCollapsed] = useState(false)
   const [mobileOpen, setMobileOpen] = useState(false)
-  const [leftPanelEl, setLeftPanelEl] = useState<HTMLDivElement | null>(null)
 
   const userInitial = (userInfo?.username ?? '用户').slice(0, 1).toUpperCase()
+  const isChatPage = location.pathname === '/chat'
 
   return (
     <TooltipProvider delayDuration={0}>
-      <LayoutContext.Provider value={{ leftPanelEl }}>
       <div className="flex h-screen overflow-hidden bg-background">
         {/* Sidebar */}
         <aside
           className={cn(
-            'hidden md:flex flex-col border-r bg-sidebar transition-all duration-300',
+            'hidden md:flex flex-col border-r bg-sidebar overflow-hidden transition-[width] duration-300',
             collapsed ? 'w-16' : 'w-64',
           )}
         >
-          {/* 侧栏标题 */}
-          {!collapsed && (
-            <div className="px-4 pb-1 pt-4">
-              <span className="text-base font-semibold">工作台</span>
-            </div>
-          )}
+          {/* 侧栏标题 + 收起/展开按钮 */}
+          <div className="flex items-center pt-4 pb-1 px-2">
+            {!collapsed && (
+              <div className="flex-1 overflow-hidden">
+                <span className="block px-2 text-base font-semibold whitespace-nowrap">工作台</span>
+              </div>
+            )}
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className={cn('h-7 w-7 shrink-0 text-muted-foreground', collapsed && 'mx-auto')}
+                  onClick={() => setCollapsed(!collapsed)}
+                >
+                  {collapsed ? <PanelLeft className="h-4 w-4" /> : <PanelLeftClose className="h-4 w-4" />}
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="right">{collapsed ? '展开侧栏' : '收起侧栏'}</TooltipContent>
+            </Tooltip>
+          </div>
           {/* 导航菜单 */}
           <nav className="space-y-1 px-3 pt-2">
               {navItems.map((item) => {
@@ -69,14 +81,15 @@ export default function MainLayout() {
                       <button
                         onClick={() => navigate(item.path)}
                         className={cn(
-                          'flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm transition-colors',
+                          'flex w-full items-center gap-3 overflow-hidden rounded-lg px-3 py-2.5 text-sm whitespace-nowrap transition-colors',
+                          collapsed && 'justify-center px-0',
                           isActive
                             ? 'bg-sidebar-accent text-sidebar-accent-foreground font-medium'
                             : 'text-sidebar-foreground hover:bg-sidebar-accent/50',
                         )}
                       >
                         <Icon className="h-4 w-4 shrink-0" />
-                        {!collapsed && <span>{item.label}</span>}
+                        {!collapsed && <span className="min-w-0 flex-1 truncate text-left">{item.label}</span>}
                       </button>
                     </TooltipTrigger>
                     {collapsed && (
@@ -86,17 +99,17 @@ export default function MainLayout() {
                 )
               })}
           </nav>
-          {/* 会话面板挂载点：由智能问答页通过 portal 渲染（新建对话 + 最近 + 会话列表） */}
-          {!collapsed && <div ref={setLeftPanelEl} className="contents" />}
+          {/* 会话面板：仅智能问答路由下显示（新建对话 + 最近 + 会话列表）；收起时隐藏 */}
+          {!collapsed && isChatPage && <ChatSessionPanel />}
           {/* 底部：当前用户信息 */}
           <div className="mt-auto p-3">
-            <div className="flex items-center gap-2 rounded-lg px-2 py-1.5">
+            <div className={cn('flex items-center gap-2 rounded-lg py-1.5', collapsed ? 'justify-center px-0' : 'px-2')}>
               <Avatar className="h-7 w-7 shrink-0">
                 <AvatarFallback className="text-xs">{userInitial}</AvatarFallback>
               </Avatar>
               {!collapsed && (
                 <>
-                  <p className="flex-1 min-w-0 truncate text-sm font-medium">
+                  <p className="flex-1 min-w-0 truncate text-sm font-medium whitespace-nowrap">
                     {userInfo?.username ?? '未登录'}
                   </p>
                   <Tooltip>
@@ -153,7 +166,7 @@ export default function MainLayout() {
 
         {/* Main content */}
         <main className="flex-1 overflow-hidden flex flex-col">
-          {/* Top bar：品牌标识 + 右侧图标簇（侧栏收起/主题切换/个人中心） */}
+          {/* Top bar：品牌标识 + 右侧图标簇（主题切换/个人中心） */}
           <div className="flex h-12 shrink-0 items-center gap-2 border-b px-4">
             <Button
               variant="ghost"
@@ -166,19 +179,6 @@ export default function MainLayout() {
             <BookOpenText className="h-5 w-5" />
             <span className="text-sm font-semibold">RAG 知识库</span>
             <div className="ml-auto flex items-center gap-1">
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="hidden h-8 w-8 md:inline-flex"
-                    onClick={() => setCollapsed(!collapsed)}
-                  >
-                    {collapsed ? <PanelLeft className="h-4 w-4" /> : <PanelLeftClose className="h-4 w-4" />}
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent side="bottom">{collapsed ? '展开侧栏' : '收起侧栏'}</TooltipContent>
-              </Tooltip>
               <Tooltip>
                 <TooltipTrigger asChild>
                   <Button variant="ghost" size="icon" className="h-8 w-8" onClick={toggleTheme}>
@@ -208,7 +208,6 @@ export default function MainLayout() {
           </div>
         </main>
       </div>
-      </LayoutContext.Provider>
     </TooltipProvider>
   )
 }

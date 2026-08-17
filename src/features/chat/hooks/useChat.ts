@@ -1,53 +1,25 @@
-import { useState, useCallback, useRef } from 'react'
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useCallback } from 'react'
 import { toast } from 'sonner'
-import { getChatSessionList, createChatSession, deleteChatSession, chatStream } from '../api'
-import type { ReferenceItem } from '../types'
+import { chatStream } from '../api'
+import { useChatStore } from '../store/chatStore'
+import type { ChatMessage } from '../types'
 
-export interface ChatMessage {
-  id: string
-  role: 'user' | 'assistant'
-  content: string
-  references?: ReferenceItem[]
-  isStreaming?: boolean
-}
+// 模块级流式控制器：聊天页卸载后流式请求继续进行，结果仍写入全局 store
+let abortController: AbortController | null = null
 
+/**
+ * 聊天对话逻辑：消息收发与流式控制。
+ * 对话状态存于全局 chatStore，跨页面切换不丢失。
+ */
 export function useChat() {
-  const queryClient = useQueryClient()
-  const [currentSessionId, setCurrentSessionId] = useState<string | null>(null)
-  const [messages, setMessages] = useState<ChatMessage[]>([])
-  const [isStreaming, setIsStreaming] = useState(false)
-  const abortRef = useRef<AbortController | null>(null)
-
-  const sessionsQuery = useQuery({
-    queryKey: ['chat-sessions'],
-    queryFn: () => getChatSessionList(),
-  })
-
-  const createSessionMutation = useMutation({
-    mutationFn: () => createChatSession(),
-    onSuccess: (session) => {
-      setCurrentSessionId(session.id)
-      setMessages([])
-      queryClient.invalidateQueries({ queryKey: ['chat-sessions'] })
-    },
-  })
-
-  const deleteSessionMutation = useMutation({
-    mutationFn: (sessionId: string) => deleteChatSession(sessionId),
-    onSuccess: (_, deletedId) => {
-      if (currentSessionId === deletedId) {
-        setCurrentSessionId(null)
-        setMessages([])
-      }
-      queryClient.invalidateQueries({ queryKey: ['chat-sessions'] })
-      toast.success('会话已删除')
-    },
-  })
+  const currentSessionId = useChatStore((s) => s.currentSessionId)
+  const messages = useChatStore((s) => s.messages)
+  const isStreaming = useChatStore((s) => s.isStreaming)
 
   const sendMessage = useCallback(
     async (question: string, documentIds?: string[]) => {
-      if (!currentSessionId || isStreaming) return
+      const store = useChatStore.getState()
+      if (!store.currentSessionId || store.isStreaming) return
 
       const userMsg: ChatMessage = {
         id: `user-${Date.now()}`,
@@ -62,44 +34,46 @@ export function useChat() {
         isStreaming: true,
       }
 
-      setMessages((prev) => [...prev, userMsg, assistantMsg])
-      setIsStreaming(true)
+      store.setMessages((prev) => [...prev, userMsg, assistantMsg])
+      store.setIsStreaming(true)
 
       const controller = new AbortController()
-      abortRef.current = controller
+      abortController = controller
 
       await chatStream(
         {
-          sessionId: currentSessionId,
+          sessionId: store.currentSessionId,
           question,
           documentIds,
         },
         {
           onMessage: (content) => {
-            setMessages((prev) => {
+            useChatStore.getState().setMessages((prev) => {
               const last = prev[prev.length - 1]
               if (!last || last.role !== 'assistant') return prev
               return [...prev.slice(0, -1), { ...last, content: last.content + content }]
             })
           },
           onReferences: (items) => {
-            setMessages((prev) => {
+            useChatStore.getState().setMessages((prev) => {
               const last = prev[prev.length - 1]
               if (!last || last.role !== 'assistant') return prev
               return [...prev.slice(0, -1), { ...last, references: items }]
             })
           },
           onDone: () => {
-            setMessages((prev) => {
+            const s = useChatStore.getState()
+            s.setMessages((prev) => {
               const last = prev[prev.length - 1]
               if (!last || last.role !== 'assistant') return prev
               return [...prev.slice(0, -1), { ...last, isStreaming: false }]
             })
-            setIsStreaming(false)
-            abortRef.current = null
+            s.setIsStreaming(false)
+            abortController = null
           },
           onError: (message) => {
-            setMessages((prev) => {
+            const s = useChatStore.getState()
+            s.setMessages((prev) => {
               const last = prev[prev.length - 1]
               if (!last || last.role !== 'assistant') return prev
               return [
@@ -107,8 +81,8 @@ export function useChat() {
                 { ...last, content: last.content || `问答异常: ${message}`, isStreaming: false },
               ]
             })
-            setIsStreaming(false)
-            abortRef.current = null
+            s.setIsStreaming(false)
+            abortController = null
             toast.error(message)
           },
         },
@@ -119,34 +93,22 @@ export function useChat() {
   )
 
   const stopStreaming = useCallback(() => {
-    abortRef.current?.abort()
-    abortRef.current = null
-    setMessages((prev) => {
+    abortController?.abort()
+    abortController = null
+    const store = useChatStore.getState()
+    store.setMessages((prev) => {
       const last = prev[prev.length - 1]
       if (!last || last.role !== 'assistant') return prev
       return [...prev.slice(0, -1), { ...last, isStreaming: false }]
     })
-    setIsStreaming(false)
+    store.setIsStreaming(false)
   }, [])
-
-  const switchSession = useCallback((sessionId: string) => {
-    setCurrentSessionId(sessionId)
-    setMessages([])
-  }, [])
-
-  const newSession = useCallback(() => {
-    createSessionMutation.mutate()
-  }, [createSessionMutation])
 
   return {
-    sessions: sessionsQuery.data ?? [],
     currentSessionId,
     messages,
     isStreaming,
     sendMessage,
     stopStreaming,
-    switchSession,
-    newSession,
-    deleteSession: deleteSessionMutation.mutate,
   }
 }

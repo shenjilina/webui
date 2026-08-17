@@ -20,3 +20,12 @@ export interface ReferenceItem {
   snippet: string
   score: number
 }
+
+/** 对话消息 */
+export interface ChatMessage {
+  id: string
+  role: 'user' | 'assistant'
+  content: string
+  references?: ReferenceItem[]
+  isStreaming?: boolean
+}

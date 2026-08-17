@@ -1,37 +1,16 @@
-import { createPortal } from 'react-dom'
 import { useChat } from '../hooks/useChat'
-import { ChatSidebar } from '../components/ChatSidebar'
 import { ChatInterface } from '../components/ChatInterface'
-import { useLayoutContext } from '@/app/layout/LayoutContext'
 
+/**
+ * 智能问答页：仅负责对话主区域。
+ * 会话面板由 MainLayout 直接渲染（ChatSessionPanel），
+ * 会话/消息状态存于全局 chatStore，跨页面切换不丢失。
+ */
 export default function ChatPage() {
-  const {
-    sessions,
-    currentSessionId,
-    messages,
-    isStreaming,
-    sendMessage,
-    stopStreaming,
-    switchSession,
-    newSession,
-    deleteSession,
-  } = useChat()
-  const { leftPanelEl } = useLayoutContext()
+  const { messages, isStreaming, sendMessage, stopStreaming } = useChat()
 
   return (
     <div className="flex h-[calc(100vh-3rem)]">
-      {/* 会话面板通过 portal 挂载到左侧导航侧栏内（工作台 + 新建对话 + 会话列表） */}
-      {leftPanelEl &&
-        createPortal(
-          <ChatSidebar
-            sessions={sessions}
-            currentSessionId={currentSessionId}
-            onSelectSession={switchSession}
-            onNewSession={newSession}
-            onDeleteSession={deleteSession}
-          />,
-          leftPanelEl,
-        )}
       <div className="flex-1">
         <ChatInterface
           messages={messages}
