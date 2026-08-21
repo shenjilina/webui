@@ -13,7 +13,7 @@ export function login(data: LoginRequest): Promise<LoginResponse> {
 
 /** 获取用户信息 */
 export function getUserInfo(): Promise<UserInfo> {
-  return get<UserInfo>('/auth/info')
+  return get<UserInfo>('/auth/me')
 }
 
 /** 修改密码 */
