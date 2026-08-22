@@ -118,7 +118,7 @@ export default function MainLayout() {
                         variant="ghost"
                         size="icon"
                         className="h-7 w-7 shrink-0 text-muted-foreground hover:text-destructive"
-                        onClick={logout}
+                        onClick={() => logout()}
                       >
                         <LogOut className="h-4 w-4" />
                       </Button>

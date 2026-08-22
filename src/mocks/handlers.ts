@@ -58,12 +58,26 @@ export const handlers = [
     await delay(NET_DELAY)
     const body = (await request.json()) as LoginRequest
     if (body.username === MOCK_USERNAME && body.password === MOCK_PASSWORD) {
-      return ok({ token: MOCK_TOKEN, userInfo: mockUser })
+      return ok({
+        userId: mockUser.id,
+        username: mockUser.username,
+        email: mockUser.email,
+        accessToken: MOCK_TOKEN,
+        tokenType: 'bearer',
+        expiresIn: 3600,
+      })
     }
     return fail('用户名或密码错误')
   }),
 
-  http.get('/api/auth/info', async ({ request }) => {
+  http.post('/api/auth/logout', async ({ request }) => {
+    await delay(NET_DELAY)
+    const authError = unauthorizedIfNoAuth(request)
+    if (authError) return authError
+    return ok(null)
+  }),
+
+  http.get('/api/users/info', async ({ request }) => {
     await delay(NET_DELAY)
     const authError = unauthorizedIfNoAuth(request)
     if (authError) return authError

@@ -1,8 +1,11 @@
 /** 用户信息 */
 export interface UserInfo {
-  id: string
+  id: number
   username: string
+  email: string
+  isActive: boolean
   createdAt: string
+  updatedAt: string
 }
 
 /** 登录请求 */
@@ -13,8 +16,12 @@ export interface LoginRequest {
 
 /** 登录响应 */
 export interface LoginResponse {
-  token: string
-  userInfo: UserInfo
+  userId: number
+  username: string
+  email: string
+  accessToken: string
+  tokenType?: string
+  expiresIn: number
 }
 
 /** 修改密码请求 */
