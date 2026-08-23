@@ -1,5 +1,4 @@
 import { useState, useRef, useEffect } from 'react'
-import { useQuery } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 import {
   Send,
@@ -11,13 +10,14 @@ import {
   Check,
   Sparkles,
   FileText,
-  ListOrdered,
+  ListOrdered
 } from 'lucide-react'
 import { Button } from '@/shared/components/ui/button'
 import { ScrollArea } from '@/shared/components/ui/scroll-area'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/shared/components/ui/tooltip'
 import { MarkdownRenderer } from './MarkdownRenderer'
-import { getDocumentOptions } from '@/features/document/api'
+import { useKnowledgeBases } from '@/features/knowledge/hooks/useKnowledgeBases'
+import { useDocuments } from '@/features/document/hooks/useDocuments'
 import { cn } from '@/shared/lib/utils'
 import type { ChatMessage } from '../hooks/useChat'
 import type { ReferenceItem } from '../types'
@@ -26,7 +26,7 @@ import type { ReferenceItem } from '../types'
 const suggestions = [
   { icon: Sparkles, label: '帮我推荐', text: '请推荐知识库中值得重点阅读的内容' },
   { icon: FileText, label: '帮我总结', text: '请总结知识库文档的核心观点' },
-  { icon: ListOrdered, label: '帮我写大纲', text: '请为知识库内容编写一份内容大纲' },
+  { icon: ListOrdered, label: '帮我写大纲', text: '请为知识库内容编写一份内容大纲' }
 ]
 
 interface ChatInterfaceProps {
@@ -36,18 +36,28 @@ interface ChatInterfaceProps {
   onStopStreaming: () => void
 }
 
-export function ChatInterface({ messages, isStreaming, onSendMessage, onStopStreaming }: ChatInterfaceProps) {
+export function ChatInterface({
+  messages,
+  isStreaming,
+  onSendMessage,
+  onStopStreaming
+}: ChatInterfaceProps) {
   const navigate = useNavigate()
   const [input, setInput] = useState('')
   const [kbOpen, setKbOpen] = useState(false)
   const [selectedDocIds, setSelectedDocIds] = useState<string[]>([])
   const scrollRef = useRef<HTMLDivElement>(null)
   const kbRef = useRef<HTMLDivElement>(null)
+  const { list: knowledgeBases } = useKnowledgeBases()
+  const [knowledgeBaseId, setKnowledgeBaseId] = useState<number | null>(null)
+  const { list: documents } = useDocuments(knowledgeBaseId)
 
-  const optionsQuery = useQuery({
-    queryKey: ['document-options'],
-    queryFn: () => getDocumentOptions(),
-  })
+  useEffect(() => {
+    if (knowledgeBases.length > 0 && !knowledgeBases.some((item) => item.id === knowledgeBaseId)) {
+      setKnowledgeBaseId(knowledgeBases[0].id)
+      setSelectedDocIds([])
+    }
+  }, [knowledgeBases, knowledgeBaseId])
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -100,38 +110,39 @@ export function ChatInterface({ messages, isStreaming, onSendMessage, onStopStre
     <div className="flex h-full flex-col">
       {/* Messages */}
       <ScrollArea className="flex-1" ref={scrollRef}>
-        <div className="mx-auto max-w-3xl px-4 py-6 space-y-6">
+        <div className="mx-auto max-w-3xl space-y-6 px-4 py-6">
           {messages.length === 0 && (
             <div className="flex flex-col items-center justify-center py-20 text-center">
-              <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-primary/10 mb-4">
-                <BookOpen className="h-8 w-8 text-primary" />
+              <div className="bg-primary/10 mb-4 flex h-16 w-16 items-center justify-center rounded-2xl">
+                <BookOpen className="text-primary h-8 w-8" />
               </div>
-              <h3 className="text-lg font-semibold text-foreground">RAG 智能问答</h3>
-              <p className="mt-2 text-sm text-muted-foreground max-w-sm">
+              <h3 className="text-foreground text-lg font-semibold">RAG 智能问答</h3>
+              <p className="text-muted-foreground mt-2 max-w-sm text-sm">
                 基于知识库的智能问答，支持 Markdown 渲染、公式显示和溯源引用
               </p>
             </div>
           )}
           {messages.map((msg) => (
-            <div key={msg.id} className={cn('flex gap-3', msg.role === 'user' ? 'justify-end' : 'justify-start')}>
+            <div
+              key={msg.id}
+              className={cn('flex gap-3', msg.role === 'user' ? 'justify-end' : 'justify-start')}
+            >
               {msg.role === 'assistant' && (
-                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-semibold text-primary">
+                <div className="bg-primary/10 text-primary flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-semibold">
                   AI
                 </div>
               )}
               <div
                 className={cn(
                   'max-w-[80%] rounded-2xl px-4 py-3',
-                  msg.role === 'user'
-                    ? 'bg-primary text-primary-foreground'
-                    : 'bg-muted',
+                  msg.role === 'user' ? 'bg-primary text-primary-foreground' : 'bg-muted'
                 )}
               >
                 {msg.role === 'assistant' ? (
                   <div>
                     <MarkdownRenderer content={msg.content || '...'} />
                     {msg.isStreaming && (
-                      <span className="inline-block w-2 h-4 bg-foreground/60 animate-pulse ml-0.5 align-middle" />
+                      <span className="bg-foreground/60 ml-0.5 inline-block h-4 w-2 animate-pulse align-middle" />
                     )}
                     {msg.references && msg.references.length > 0 && (
                       <ReferencesPanel references={msg.references} />
@@ -147,10 +158,10 @@ export function ChatInterface({ messages, isStreaming, onSendMessage, onStopStre
       </ScrollArea>
 
       {/* 输入区域：卡片式 Composer */}
-      <div className="px-4 pb-4 pt-2">
+      <div className="px-4 pt-2 pb-4">
         <div className="mx-auto max-w-3xl">
           <form onSubmit={handleFormSubmit}>
-            <div className="rounded-2xl border bg-background shadow-sm transition-colors focus-within:border-foreground/25">
+            <div className="bg-background focus-within:border-foreground/25 rounded-2xl border shadow-sm transition-colors">
               <textarea
                 value={input}
                 onChange={handleInputChange}
@@ -158,7 +169,7 @@ export function ChatInterface({ messages, isStreaming, onSendMessage, onStopStre
                 placeholder="向知识助手提问"
                 rows={2}
                 disabled={isStreaming}
-                className="w-full resize-none bg-transparent px-4 pt-3.5 text-sm outline-none placeholder:text-muted-foreground disabled:opacity-60"
+                className="placeholder:text-muted-foreground w-full resize-none bg-transparent px-4 pt-3.5 text-sm outline-none disabled:opacity-60"
               />
               {/* 底部工具行 */}
               <div className="flex items-center gap-2 px-3 pb-3">
@@ -168,7 +179,7 @@ export function ChatInterface({ messages, isStreaming, onSendMessage, onStopStre
                       type="button"
                       variant="ghost"
                       size="icon"
-                      className="h-8 w-8 rounded-full text-muted-foreground"
+                      className="text-muted-foreground h-8 w-8 rounded-full"
                       onClick={() => navigate('/document/list')}
                     >
                       <Plus className="h-4 w-4" />
@@ -185,35 +196,38 @@ export function ChatInterface({ messages, isStreaming, onSendMessage, onStopStre
                       'flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs transition-colors',
                       selectedDocIds.length > 0
                         ? 'border-foreground/30 bg-muted text-foreground'
-                        : 'border-border text-muted-foreground hover:text-foreground',
+                        : 'border-border text-muted-foreground hover:text-foreground'
                     )}
                   >
                     <Folder className="h-3.5 w-3.5" />
-                    {selectedDocIds.length > 0 ? `已选 ${selectedDocIds.length} 篇文档` : '知识库选择'}
+                    {selectedDocIds.length > 0
+                      ? `已选 ${selectedDocIds.length} 篇文档`
+                      : '知识库选择'}
                     <ChevronDown className="h-3 w-3" />
                   </button>
                   {kbOpen && (
-                    <div className="absolute bottom-full left-0 z-20 mb-2 w-64 rounded-xl border bg-popover p-1.5 shadow-md">
-                      <p className="px-2.5 py-1.5 text-xs text-muted-foreground">
+                    <div className="bg-popover absolute bottom-full left-0 z-20 mb-2 w-64 rounded-xl border p-1.5 shadow-md">
+                      <p className="text-muted-foreground px-2.5 py-1.5 text-xs">
                         选择问答范围，不选则检索全部知识库
                       </p>
                       <ScrollArea className="max-h-56">
                         <div className="space-y-0.5">
-                          {(optionsQuery.data ?? []).map((opt) => {
-                            const checked = selectedDocIds.includes(opt.id)
+                          {documents.map((opt) => {
+                            const id = String(opt.id)
+                            const checked = selectedDocIds.includes(id)
                             return (
                               <button
                                 key={opt.id}
                                 type="button"
-                                onClick={() => toggleDoc(opt.id)}
-                                className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-xs transition-colors hover:bg-accent"
+                                onClick={() => toggleDoc(id)}
+                                className="hover:bg-accent flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-xs transition-colors"
                               >
                                 <span
                                   className={cn(
                                     'flex h-4 w-4 shrink-0 items-center justify-center rounded border',
                                     checked
                                       ? 'border-primary bg-primary text-primary-foreground'
-                                      : 'border-border',
+                                      : 'border-border'
                                   )}
                                 >
                                   {checked && <Check className="h-3 w-3" />}
@@ -222,8 +236,10 @@ export function ChatInterface({ messages, isStreaming, onSendMessage, onStopStre
                               </button>
                             )
                           })}
-                          {(optionsQuery.data ?? []).length === 0 && (
-                            <p className="px-2.5 py-2 text-xs text-muted-foreground">暂无可选文档</p>
+                          {documents.length === 0 && (
+                            <p className="text-muted-foreground px-2.5 py-2 text-xs">
+                              暂无可选文档
+                            </p>
                           )}
                         </div>
                       </ScrollArea>
@@ -242,7 +258,12 @@ export function ChatInterface({ messages, isStreaming, onSendMessage, onStopStre
                       <Square className="h-4 w-4" />
                     </Button>
                   ) : (
-                    <Button type="submit" size="icon" className="h-9 w-9 rounded-lg" disabled={!input.trim()}>
+                    <Button
+                      type="submit"
+                      size="icon"
+                      className="h-9 w-9 rounded-lg"
+                      disabled={!input.trim()}
+                    >
                       <Send className="h-4 w-4" />
                     </Button>
                   )}
@@ -257,7 +278,7 @@ export function ChatInterface({ messages, isStreaming, onSendMessage, onStopStre
                 key={s.label}
                 type="button"
                 onClick={() => setInput(s.text)}
-                className="flex items-center gap-1 text-xs text-muted-foreground transition-colors hover:text-foreground"
+                className="text-muted-foreground hover:text-foreground flex items-center gap-1 text-xs transition-colors"
               >
                 <s.icon className="h-3.5 w-3.5" />
                 {s.label}
@@ -274,10 +295,10 @@ function ReferencesPanel({ references }: { references: ReferenceItem[] }) {
   const [expanded, setExpanded] = useState(false)
 
   return (
-    <div className="mt-3 border-t border-border/50 pt-3">
+    <div className="border-border/50 mt-3 border-t pt-3">
       <button
         onClick={() => setExpanded(!expanded)}
-        className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
+        className="text-muted-foreground hover:text-foreground flex items-center gap-1 text-xs transition-colors"
       >
         <BookOpen className="h-3 w-3" />
         引用来源 ({references.length})
@@ -285,8 +306,8 @@ function ReferencesPanel({ references }: { references: ReferenceItem[] }) {
       {expanded && (
         <div className="mt-2 space-y-2">
           {references.map((ref, i) => (
-            <div key={i} className="rounded-lg bg-background/50 p-2 text-xs">
-              <p className="font-medium text-foreground">{ref.title}</p>
+            <div key={i} className="bg-background/50 rounded-lg p-2 text-xs">
+              <p className="text-foreground font-medium">{ref.title}</p>
               <p className="text-muted-foreground mt-1 line-clamp-2">{ref.snippet}</p>
             </div>
           ))}

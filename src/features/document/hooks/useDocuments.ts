@@ -1,78 +1,90 @@
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import {
-  getDocumentList,
   createDocument,
-  updateDocument,
   deleteDocument,
-  uploadDocument,
-  getDocumentOptions,
+  deleteFileSource,
+  listDocuments,
+  listFiles,
+  parseDocument,
+  retryDocuments
 } from '../api'
-import type { DocumentListParams, CreateDocumentRequest, UpdateDocumentRequest } from '../types'
+import type { DocumentInfo, FileInfo } from '../types'
 
-export function useDocuments(params: DocumentListParams) {
+const documentKey = (knowledgeBaseId: number | null) => ['documents', knowledgeBaseId] as const
+const fileKey = (knowledgeBaseId: number | null) => ['files', knowledgeBaseId] as const
+
+export function useDocuments(knowledgeBaseId: number | null) {
   const queryClient = useQueryClient()
-
-  const listQuery = useQuery({
-    queryKey: ['documents', params],
-    queryFn: () => getDocumentList(params),
-    placeholderData: (prev) => prev,
+  const enabled = knowledgeBaseId !== null
+  const documentQuery = useQuery({
+    queryKey: documentKey(knowledgeBaseId),
+    queryFn: () => listDocuments({ knowledgeBaseId: knowledgeBaseId!, pageSize: 100 }),
+    enabled
   })
-
-  const optionsQuery = useQuery({
-    queryKey: ['document-options'],
-    queryFn: () => getDocumentOptions(),
+  const fileQuery = useQuery({
+    queryKey: fileKey(knowledgeBaseId),
+    queryFn: () => listFiles({ knowledgeBaseId: knowledgeBaseId!, pageSize: 100 }),
+    enabled
   })
-
+  const invalidate = () => {
+    queryClient.invalidateQueries({ queryKey: documentKey(knowledgeBaseId) })
+    // queryClient.invalidateQueries({ queryKey: fileKey(knowledgeBaseId) })
+    queryClient.invalidateQueries({ queryKey: ['knowledge-base-summary', knowledgeBaseId] })
+  }
   const createMutation = useMutation({
-    mutationFn: (data: CreateDocumentRequest) => createDocument(data),
+    mutationFn: createDocument,
     onSuccess: () => {
-      toast.success('文档创建成功')
-      queryClient.invalidateQueries({ queryKey: ['documents'] })
-      queryClient.invalidateQueries({ queryKey: ['document-options'] })
-    },
+      toast.success('文档已创建')
+      invalidate()
+    }
   })
-
-  const updateMutation = useMutation({
-    mutationFn: ({ id, data }: { id: string; data: UpdateDocumentRequest }) =>
-      updateDocument(id, data),
+  const parseMutation = useMutation({
+    mutationFn: parseDocument,
     onSuccess: () => {
-      toast.success('文档更新成功')
-      queryClient.invalidateQueries({ queryKey: ['documents'] })
-    },
+      toast.success('解析任务已开始')
+      invalidate()
+    }
   })
-
-  const deleteMutation = useMutation({
-    mutationFn: (id: string) => deleteDocument(id),
+  const retryMutation = useMutation({
+    mutationFn: () => retryDocuments(knowledgeBaseId!),
+    onSuccess: (result) => {
+      toast.success(`已重试 ${result.queuedFileIds.length} 个失败文件`)
+      invalidate()
+    }
+  })
+  const deleteDocumentMutation = useMutation({
+    mutationFn: deleteDocument,
     onSuccess: () => {
       toast.success('文档已删除')
-      queryClient.invalidateQueries({ queryKey: ['documents'] })
-      queryClient.invalidateQueries({ queryKey: ['document-options'] })
-    },
+      invalidate()
+    }
   })
-
-  const uploadMutation = useMutation({
-    mutationFn: (file: File) => uploadDocument(file),
+  const deleteSourceMutation = useMutation({
+    mutationFn: deleteFileSource,
     onSuccess: () => {
-      toast.success('文件上传成功')
-      queryClient.invalidateQueries({ queryKey: ['documents'] })
-      queryClient.invalidateQueries({ queryKey: ['document-options'] })
-    },
-    onError: (err: Error) => {
-      toast.error(err.message || '上传失败')
-    },
+      toast.success('源文件已物理删除')
+      invalidate()
+    }
   })
 
   return {
-    list: listQuery.data,
-    isLoading: listQuery.isLoading,
-    isFetching: listQuery.isFetching,
-    refetch: listQuery.refetch,
-    createDoc: createMutation.mutate,
-    updateDoc: updateMutation.mutate,
-    deleteDoc: deleteMutation.mutate,
-    uploadDoc: uploadMutation.mutate,
-    isUploading: uploadMutation.isPending,
-    docOptions: optionsQuery.data ?? [],
+    list: documentQuery.data?.items ?? [],
+    files: fileQuery.data?.items ?? ([] as FileInfo[]),
+    documents: documentQuery.data?.items ?? ([] as DocumentInfo[]),
+    isLoading: documentQuery.isLoading || fileQuery.isLoading,
+    isFetching: documentQuery.isFetching || fileQuery.isFetching,
+    isError: documentQuery.isError || fileQuery.isError,
+    refetch: invalidate,
+    create: createMutation.mutate,
+    isCreating: createMutation.isPending,
+    parse: parseMutation.mutate,
+    isParsing: parseMutation.isPending,
+    retry: retryMutation.mutate,
+    isRetrying: retryMutation.isPending,
+    remove: deleteDocumentMutation.mutate,
+    isDeleting: deleteDocumentMutation.isPending,
+    deleteSource: deleteSourceMutation.mutate,
+    isDeletingSource: deleteSourceMutation.isPending
   }
 }

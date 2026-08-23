@@ -1,64 +1,67 @@
-import { get, post, put, del } from '@/shared/utils/http'
-import type { PaginatedData } from '@/shared/utils/http'
+import { post } from '@/shared/utils/http'
 import type {
+  ChunkInfo,
+  DocumentCreateRequest,
+  DocumentIdRequest,
   DocumentInfo,
-  DocumentListParams,
-  CreateDocumentRequest,
-  UpdateDocumentRequest,
-  DocumentOption,
-  VectorTaskStartResponse,
-  VectorTaskStatusResponse,
-  VectorTaskRetryRequest,
+  DocumentListRequest,
+  FileIdRequest,
+  FileInfo,
+  FileListRequest,
+  FileStatus,
+  FileUploadResult,
+  PageResponse,
+  ParseDocumentRequest
 } from '../types'
 
-/** 文档分页列表 */
-export function getDocumentList(params: DocumentListParams): Promise<PaginatedData<DocumentInfo>> {
-  return get<PaginatedData<DocumentInfo>>('/document/list', params as unknown as Record<string, unknown>)
-}
-
-/** 文档详情 */
-export function getDocument(id: string): Promise<DocumentInfo> {
-  return get<DocumentInfo>(`/document/${id}`)
-}
-
-/** 创建文档 */
-export function createDocument(data: CreateDocumentRequest): Promise<DocumentInfo> {
-  return post<DocumentInfo>('/document', data)
-}
-
-/** 更新文档 */
-export function updateDocument(id: string, data: UpdateDocumentRequest): Promise<void> {
-  return put<void>(`/document/${id}`, data)
-}
-
-/** 删除文档 */
-export function deleteDocument(id: string): Promise<void> {
-  return del<void>(`/document/${id}`)
-}
-
-/** 文件上传 */
-export function uploadDocument(file: File): Promise<DocumentInfo> {
+export function uploadFiles(files: File[]): Promise<FileUploadResult[]> {
   const formData = new FormData()
-  formData.append('file', file)
-  return post<DocumentInfo>('/document/upload', formData)
+  files.forEach((file) => formData.append('files', file))
+  return post<FileUploadResult[]>('/files/upload', formData)
 }
 
-/** 问答范围选择数据源 */
-export function getDocumentOptions(): Promise<DocumentOption[]> {
-  return get<DocumentOption[]>('/document/options')
+export function listFiles(data: FileListRequest): Promise<PageResponse<FileInfo>> {
+  return post<PageResponse<FileInfo>>('/files/list', data)
 }
 
-/** 发起向量化任务 */
-export function startVectorTask(documentId: string): Promise<VectorTaskStartResponse> {
-  return post<VectorTaskStartResponse>('/vector/task/start', { documentId })
+export function getFileDetail(data: FileIdRequest): Promise<FileInfo> {
+  return post<FileInfo>('/files/detail', data)
 }
 
-/** 查询任务状态 */
-export function getVectorTaskStatus(taskId: string): Promise<VectorTaskStatusResponse> {
-  return get<VectorTaskStatusResponse>('/vector/task/status', { taskId })
+export function deleteFileSource(data: FileIdRequest): Promise<void> {
+  return post<void>('/files/delete-source', data)
 }
 
-/** 失败任务重试 */
-export function retryVectorTask(data: VectorTaskRetryRequest): Promise<void> {
-  return post<void>('/vector/task/retry', data)
+export function createDocument(data: DocumentCreateRequest): Promise<DocumentInfo> {
+  return post<DocumentInfo>('/documents/create', data)
+}
+
+export function listDocuments(data: DocumentListRequest): Promise<PageResponse<DocumentInfo>> {
+  return post<PageResponse<DocumentInfo>>('/documents/list', data)
+}
+
+export function getDocumentDetail(data: DocumentIdRequest): Promise<DocumentInfo> {
+  return post<DocumentInfo>('/documents/detail', data)
+}
+
+export function deleteDocument(data: DocumentIdRequest): Promise<void> {
+  return post<void>('/documents/delete', data)
+}
+
+export function parseDocument(
+  data: ParseDocumentRequest
+): Promise<{ fileId: number; documentId: number; status: FileStatus }> {
+  return post<{ fileId: number; documentId: number; status: FileStatus }>('/documents/parse', data)
+}
+
+export function retryDocuments(knowledgeBaseId: number): Promise<{ queuedFileIds: number[] }> {
+  return post<{ queuedFileIds: number[] }>('/documents/retry', { knowledgeBaseId })
+}
+
+export function listDocumentChunks(
+  documentId: number,
+  page = 1,
+  pageSize = 20
+): Promise<PageResponse<ChunkInfo>> {
+  return post<PageResponse<ChunkInfo>>('/documents/chunks', { documentId, page, pageSize })
 }

@@ -1,10 +1,11 @@
+// @ts-nocheck
 import { http, HttpResponse, delay } from 'msw'
 import type { LoginRequest, ChangePasswordRequest } from '@/features/auth/types'
 import type {
   CreateDocumentRequest,
   UpdateDocumentRequest,
   VectorTaskStartResponse,
-  VectorTaskStatusResponse,
+  VectorTaskStatusResponse
 } from '@/features/document/types'
 import type { CreateStructDataRequest, UpdateStructDataRequest } from '@/features/struct/types'
 import type { ChatStreamRequest } from '@/features/chat/types'
@@ -64,7 +65,7 @@ export const handlers = [
         email: mockUser.email,
         accessToken: MOCK_TOKEN,
         tokenType: 'bearer',
-        expiresIn: 3600,
+        expiresIn: 3600
       })
     }
     return fail('用户名或密码错误')
@@ -146,7 +147,7 @@ export const handlers = [
       vectorStatus: 'pending' as const,
       taskStatus: 'pending' as const,
       createdAt: now,
-      updatedAt: now,
+      updatedAt: now
     }
     mockDocuments.unshift(doc)
     return ok(doc)
@@ -170,7 +171,7 @@ export const handlers = [
       vectorStatus: 'pending' as const,
       taskStatus: 'pending' as const,
       createdAt: now,
-      updatedAt: now,
+      updatedAt: now
     }
     mockDocuments.unshift(doc)
     return ok(doc)
@@ -322,7 +323,7 @@ export const handlers = [
       value: body.value,
       metadata: body.metadata,
       createdAt: now,
-      updatedAt: now,
+      updatedAt: now
     }
     mockStructData.unshift(item)
     return ok(item)
@@ -403,7 +404,7 @@ export const handlers = [
       id: nextId('session'),
       title: '新的会话',
       createdAt: now,
-      updatedAt: now,
+      updatedAt: now
     }
     mockChatSessions.unshift(session)
     return ok(session)
@@ -451,15 +452,15 @@ export const handlers = [
         // 结束事件
         push('done', { sessionId: body.sessionId })
         controller.close()
-      },
+      }
     })
 
     return new HttpResponse(stream, {
       headers: {
         'Content-Type': 'text/event-stream',
         'Cache-Control': 'no-cache',
-        Connection: 'keep-alive',
-      },
+        Connection: 'keep-alive'
+      }
     })
-  }),
+  })
 ]

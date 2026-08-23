@@ -19,21 +19,17 @@ export interface PaginatedData<T> {
 interface ApiErrorDetail {
   field?: string
   message?: string
-  type?: string
 }
 
 interface ApiErrorData {
   errors?: ApiErrorDetail[]
-  request_id?: string
 }
 
-/** 优先显示字段级错误，无法提取时回退到顶层 message。 */
 function getApiErrorMessage(response: Partial<ApiResponse> | null | undefined): string {
   const data = response?.data as ApiErrorData | null | undefined
   const details = Array.isArray(data?.errors)
     ? data.errors.map((item) => item.message?.trim()).filter(Boolean)
     : []
-
   return details.length > 0 ? details.join('；') : response?.message?.trim() || '请求失败'
 }
 
@@ -72,11 +68,6 @@ http.interceptors.response.use(
 
     const { status, data } = error.response
     const message = getApiErrorMessage(data)
-    if (message) {
-      toast.error(message || '登录已过期，请重新登录')
-      return Promise.reject(new Error(message))
-    }
-    debugger;
     if (status === 401) {
       if (!isHandling401) {
         isHandling401 = true
@@ -92,7 +83,7 @@ http.interceptors.response.use(
     }
 
     toast.error(message || `请求失败 (${status})`)
-    return Promise.reject(error)
+    return Promise.reject(new Error(message))
   }
 )
 
@@ -102,7 +93,9 @@ export async function get<T>(url: string, params?: Record<string, unknown>): Pro
 }
 
 export async function post<T>(url: string, data?: unknown): Promise<T> {
-  const res = await http.post<ApiResponse<T>>(url, data)
+  const res = await http.post<ApiResponse<T>>(url, data, {
+    headers: data instanceof FormData ? { 'Content-Type': undefined } : undefined
+  })
   return res.data.data
 }
 
@@ -111,8 +104,13 @@ export async function put<T>(url: string, data?: unknown): Promise<T> {
   return res.data.data
 }
 
-export async function del<T>(url: string): Promise<T> {
-  const res = await http.delete<ApiResponse<T>>(url)
+export async function patch<T>(url: string, data?: unknown): Promise<T> {
+  const res = await http.patch<ApiResponse<T>>(url, data)
+  return res.data.data
+}
+
+export async function del<T>(url: string, data?: unknown): Promise<T> {
+  const res = await http.delete<ApiResponse<T>>(url, { data })
   return res.data.data
 }
 

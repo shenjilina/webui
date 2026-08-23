@@ -1,55 +1,100 @@
-import type { VectorTaskStatusType, DocumentTypeType } from '@/shared/utils/constants'
-import type { PaginationParams } from '@/shared/types'
+export type FileStatus =
+  | 'UPLOADING'
+  | 'UPLOAD_CANCELLED'
+  | 'UPLOADED'
+  | 'PARSE_PENDING'
+  | 'PARSING'
+  | 'SUCCESS'
+  | 'PARSE_FAILED'
 
-/** 文档信息 */
-export interface DocumentInfo {
-  id: string
-  title: string
-  content: string
-  type: DocumentTypeType
-  vectorStatus: VectorTaskStatusType
-  taskStatus: VectorTaskStatusType
+export type FileStorageStatus = 'PRESENT' | 'PHYSICAL_DELETED'
+export type DocumentParseStatus = 'PENDING' | 'PARSING' | 'SUCCESS' | 'FAILED'
+
+export interface FileInfo {
+  id: number
+  ownerId: number
+  filename: string
+  fileType: string | null
+  mimeType: string | null
+  fileSize: number
+  fileMd5: string
+  status: FileStatus
+  storageStatus: FileStorageStatus
   createdAt: string
   updatedAt: string
 }
 
-/** 文档列表请求参数 */
-export interface DocumentListParams extends PaginationParams {
-  keyword?: string
+export interface DocumentInfo {
+  id: number
+  fileId: number
+  knowledgeBaseId: number
+  title: string
+  description: string | null
+  chunkCount: number
+  parseStatus: DocumentParseStatus
+  errorMsg: string | null
+  vectorCleaned: boolean
+  fileSize: number
+  createdAt: string
+  updatedAt: string
 }
 
-/** 创建文档请求 */
-export interface CreateDocumentRequest {
+export interface PageResponse<T> {
+  items: T[]
+  total: number
+  page: number
+  pageSize: number
+}
+
+export interface FileUploadResult {
+  filename: string
+  accepted: boolean
+  file: FileInfo | null
+  fileId: number | null
+  error: string | null
+}
+
+export interface UploadedFile {
+  fileId: number
+  filename: string
+}
+
+export interface DocumentCreateRequest {
+  fileId: number
+  knowledgeBaseId: number
   title: string
+  description?: string | null
+}
+
+export interface DocumentListRequest {
+  knowledgeBaseId: number
+  parseStatus?: DocumentParseStatus | null
+  page?: number
+  pageSize?: number
+}
+
+export interface FileListRequest {
+  knowledgeBaseId: number
+  fileStatus?: FileStatus | null
+  page?: number
+  pageSize?: number
+}
+
+export interface FileIdRequest {
+  fileId: number
+}
+
+export interface DocumentIdRequest {
+  documentId: number
+}
+
+export interface ParseDocumentRequest extends FileIdRequest {
+  retry?: boolean
+}
+
+export interface ChunkInfo {
+  id: number
+  chunkIndex: number
   content: string
-  type: DocumentTypeType
-}
-
-/** 更新文档请求 */
-export interface UpdateDocumentRequest {
-  title: string
-  content: string
-}
-
-/** 文档选项（问答范围选择） */
-export interface DocumentOption {
-  id: string
-  title: string
-}
-
-/** 向量任务启动响应 */
-export interface VectorTaskStartResponse {
-  taskId: string
-}
-
-/** 向量任务状态响应 */
-export interface VectorTaskStatusResponse {
-  taskId: string
-  status: VectorTaskStatusType
-  documentId: string
-}
-
-/** 向量任务重试请求 */
-export interface VectorTaskRetryRequest {
-  taskId: string
+  createdAt: string
 }

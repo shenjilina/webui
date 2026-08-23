@@ -4,6 +4,8 @@ import { chatStream } from '../api'
 import { useChatStore } from '../store/chatStore'
 import type { ChatMessage } from '../types'
 
+export type { ChatMessage } from '../types'
+
 // 模块级流式控制器：聊天页卸载后流式请求继续进行，结果仍写入全局 store
 let abortController: AbortController | null = null
 
@@ -24,14 +26,14 @@ export function useChat() {
       const userMsg: ChatMessage = {
         id: `user-${Date.now()}`,
         role: 'user',
-        content: question,
+        content: question
       }
 
       const assistantMsg: ChatMessage = {
         id: `assistant-${Date.now()}`,
         role: 'assistant',
         content: '',
-        isStreaming: true,
+        isStreaming: true
       }
 
       store.setMessages((prev) => [...prev, userMsg, assistantMsg])
@@ -44,7 +46,7 @@ export function useChat() {
         {
           sessionId: store.currentSessionId,
           question,
-          documentIds,
+          documentIds
         },
         {
           onMessage: (content) => {
@@ -78,18 +80,18 @@ export function useChat() {
               if (!last || last.role !== 'assistant') return prev
               return [
                 ...prev.slice(0, -1),
-                { ...last, content: last.content || `问答异常: ${message}`, isStreaming: false },
+                { ...last, content: last.content || `问答异常: ${message}`, isStreaming: false }
               ]
             })
             s.setIsStreaming(false)
             abortController = null
             toast.error(message)
-          },
+          }
         },
-        controller.signal,
+        controller.signal
       )
     },
-    [currentSessionId, isStreaming],
+    [currentSessionId, isStreaming]
   )
 
   const stopStreaming = useCallback(() => {
@@ -109,6 +111,6 @@ export function useChat() {
     messages,
     isStreaming,
     sendMessage,
-    stopStreaming,
+    stopStreaming
   }
 }

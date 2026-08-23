@@ -1,3 +1,4 @@
+// @ts-nocheck
 import type { DocumentInfo } from '@/features/document/types'
 
 /** mock 文档列表（可变数组，供 handlers 增删改） */
@@ -11,7 +12,7 @@ export const mockDocuments: DocumentInfo[] = [
     vectorStatus: 'success',
     taskStatus: 'success',
     createdAt: '2025-06-01T08:00:00.000Z',
-    updatedAt: '2025-06-10T10:20:00.000Z',
+    updatedAt: '2025-06-10T10:20:00.000Z'
   },
   {
     id: 'doc-002',
@@ -22,7 +23,7 @@ export const mockDocuments: DocumentInfo[] = [
     vectorStatus: 'success',
     taskStatus: 'success',
     createdAt: '2025-06-03T09:15:00.000Z',
-    updatedAt: '2025-06-03T09:15:00.000Z',
+    updatedAt: '2025-06-03T09:15:00.000Z'
   },
   {
     id: 'doc-003',
@@ -33,17 +34,16 @@ export const mockDocuments: DocumentInfo[] = [
     vectorStatus: 'processing',
     taskStatus: 'processing',
     createdAt: '2025-06-08T14:00:00.000Z',
-    updatedAt: '2025-06-08T14:05:00.000Z',
+    updatedAt: '2025-06-08T14:05:00.000Z'
   },
   {
     id: 'doc-004',
     title: '知识库问答系统部署手册',
-    content:
-      '本手册描述知识库问答系统的部署流程：环境准备、服务启动、健康检查与常见问题排查。',
+    content: '本手册描述知识库问答系统的部署流程：环境准备、服务启动、健康检查与常见问题排查。',
     type: 'md',
     vectorStatus: 'pending',
     taskStatus: 'pending',
     createdAt: '2025-06-12T16:40:00.000Z',
-    updatedAt: '2025-06-12T16:40:00.000Z',
-  },
+    updatedAt: '2025-06-12T16:40:00.000Z'
+  }
 ]

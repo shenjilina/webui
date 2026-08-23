@@ -14,7 +14,7 @@ export function validateFile(file: File): FileValidationResult {
   if (!ALLOWED_FILE_EXTENSIONS.includes(ext as (typeof ALLOWED_FILE_EXTENSIONS)[number])) {
     return {
       valid: false,
-      error: `不支持的文件格式: ${ext}，仅支持 TXT / MD / PDF`,
+      error: `不支持的文件格式: ${ext}，仅支持 PDF / DOCX / TXT / MD / MARKDOWN`
     }
   }
 
@@ -33,7 +33,10 @@ export function validateFile(file: File): FileValidationResult {
 /**
  * 预留：分片上传参数计算
  */
-export function calculateChunks(file: File, chunkSize: number = 2 * 1024 * 1024): {
+export function calculateChunks(
+  file: File,
+  chunkSize: number = 2 * 1024 * 1024
+): {
   totalChunks: number
   chunks: Blob[]
 } {

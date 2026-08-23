@@ -3,7 +3,7 @@ export const VectorTaskStatus = {
   PENDING: 'pending',
   PROCESSING: 'processing',
   SUCCESS: 'success',
-  FAILED: 'failed',
+  FAILED: 'failed'
 } as const
 
 export type VectorTaskStatusType = (typeof VectorTaskStatus)[keyof typeof VectorTaskStatus]
@@ -11,24 +11,22 @@ export type VectorTaskStatusType = (typeof VectorTaskStatus)[keyof typeof Vector
 /** 文档类型枚举 */
 export const DocumentType = {
   TXT: 'txt',
-  MD: 'md',
-  PDF: 'pdf',
+  PDF: 'pdf'
 } as const
 
 export type DocumentTypeType = (typeof DocumentType)[keyof typeof DocumentType]
 
 /** 允许上传的文件扩展名 */
-export const ALLOWED_FILE_EXTENSIONS = ['.txt', '.md', '.pdf'] as const
+export const ALLOWED_FILE_EXTENSIONS = ['.pdf', '.docx', '.txt', '.md', '.markdown'] as const
 
 /** 允许上传的 MIME 类型 */
 export const ALLOWED_MIME_TYPES = {
   'text/plain': '.txt',
-  'text/markdown': '.md',
-  'application/pdf': '.pdf',
+  'application/pdf': '.pdf'
 } as const
 
 /** 最大上传文件大小（10MB） */
-export const MAX_FILE_SIZE = 10 * 1024 * 1024
+export const MAX_FILE_SIZE = 100 * 1024 * 1024
 
 /** 分页默认值 */
 export const DEFAULT_PAGE_SIZE = 20
