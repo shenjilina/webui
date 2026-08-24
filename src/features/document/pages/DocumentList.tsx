@@ -1,17 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import {
-  Archive,
-  CheckCircle2,
-  Database,
-  FileText,
-  FolderPlus,
-  Pencil,
-  RotateCcw,
-  Search,
-  Trash2,
-  Plus
-} from 'lucide-react'
+import { FileText, Plus, RotateCcw } from 'lucide-react'
 import { useUserStore } from '@/features/auth/store/userStore'
 import { getKnowledgeBaseSummary } from '@/features/knowledge/api'
 import { useKnowledgeBases } from '@/features/knowledge/hooks/useKnowledgeBases'
@@ -23,7 +12,6 @@ import type {
 import { Button } from '@/shared/components/ui/button'
 import { Badge } from '@/shared/components/ui/badge'
 import { Card, CardContent } from '@/shared/components/ui/card'
-import { Input } from '@/shared/components/ui/input'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/shared/components/ui/tooltip'
 import { formatDateTime } from '@/shared/utils/format'
 import { DeleteKnowledgeBaseDialog } from '../components/DeleteKnowledgeBaseDialog'
@@ -31,6 +19,7 @@ import { DocumentCreateDialog } from '../components/DocumentCreateDialog'
 import { DocumentDetailDialog } from '../components/DocumentDetailDialog'
 import { DocumentFileTable } from '../components/DocumentFileTable'
 import { KnowledgeBaseFormDialog } from '../components/KnowledgeBaseFormDialog'
+import { KnowledgeBaseSidebar } from '../components/KnowledgeBaseSidebar'
 import { useDocuments } from '../hooks/useDocuments'
 import type { DocumentInfo } from '../types'
 import { isProcessingFile, mapDocumentsByFile } from '../utils'
@@ -169,143 +158,36 @@ export default function DocumentListPage() {
   return (
     <div className="h-full min-h-0 p-4 md:p-6">
       <div className="grid h-full min-h-[640px] gap-4 lg:grid-cols-[320px_minmax(0,1fr)]">
-        <Card className="flex min-h-0 flex-col rounded-lg">
-          <CardContent className="flex min-h-0 flex-1 flex-col p-4">
-            <div className="mb-3 flex items-center justify-between">
-              <div className="flex items-center gap-2 font-semibold">
-                <Database className="h-4 w-4" />
-                知识库
-              </div>
-              <Button
-                size="icon"
-                variant="ghost"
-                title="新建知识库"
-                onClick={() => {
-                  setEditing(null)
-                  setFormOpen(true)
-                }}
-              >
-                <FolderPlus className="h-4 w-4" />
-              </Button>
-            </div>
-            <div className="relative mb-2">
-              <Search className="text-muted-foreground absolute top-2.5 left-3 h-4 w-4" />
-              <Input
-                className="pl-9"
-                value={searchInput}
-                onChange={(event) => setSearchInput(event.target.value)}
-                placeholder="搜索知识库"
-              />
-            </div>
-            <select
-              className="border-input bg-background mb-3 h-9 w-full rounded-md border px-3 text-sm"
-              value={status}
-              onChange={(event) => {
-                setStatus(event.target.value as KnowledgeBaseStatus | '')
-                setPage(1)
-              }}
-            >
-              <option value="">全部状态</option>
-              <option value="ACTIVE">启用</option>
-              <option value="DISABLED">已禁用</option>
-              <option value="ARCHIVED">已归档</option>
-            </select>
-            <div className="min-h-0 flex-1 space-y-1 overflow-y-auto">
-              {knowledge.isLoading ? (
-                <p className="text-muted-foreground py-8 text-center text-sm">加载中...</p>
-              ) : null}
-              {knowledge.isError ? (
-                <Empty text="知识库加载失败" action={knowledge.refetch} />
-              ) : null}
-              {!knowledge.isLoading && !knowledge.isError && knowledgeBases.length === 0 ? (
-                <Empty
-                  text="暂无知识库"
-                  action={() => {
-                    setEditing(null)
-                    setFormOpen(true)
-                  }}
-                />
-              ) : null}
-              {knowledgeBases.map((item) => {
-                const own = item.ownerId === userId
-                return (
-                  <div
-                    key={item.id}
-                    className={`group rounded-md border p-3 ${selectedId === item.id ? 'border-primary bg-primary/5' : 'hover:bg-muted border-transparent'}`}
-                  >
-                    <button
-                      type="button"
-                      className="w-full text-left"
-                      onClick={() => setSelectedId(item.id)}
-                    >
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="truncate text-sm font-medium">{item.name}</span>
-                        <StatusBadge value={item.status} />
-                      </div>
-                      <p className="text-muted-foreground mt-1 truncate text-xs">
-                        {item.description || '暂无描述'}
-                      </p>
-                    </button>
-                    {own && (
-                      <div className="mt-2 flex justify-end gap-1">
-                        <IconAction
-                          label="编辑"
-                          onClick={() => {
-                            setEditing(item)
-                            setFormOpen(true)
-                          }}
-                          icon={<Pencil className="h-3.5 w-3.5" />}
-                        />
-                        <IconAction
-                          label={item.status === 'DISABLED' ? '启用' : '禁用'}
-                          onClick={() =>
-                            changeStatus(item, item.status === 'DISABLED' ? 'ACTIVE' : 'DISABLED')
-                          }
-                          icon={<CheckCircle2 className="h-3.5 w-3.5" />}
-                        />
-                        <IconAction
-                          label={item.status === 'ARCHIVED' ? '取消归档' : '归档'}
-                          onClick={() =>
-                            changeStatus(item, item.status === 'ARCHIVED' ? 'ACTIVE' : 'ARCHIVED')
-                          }
-                          icon={<Archive className="h-3.5 w-3.5" />}
-                        />
-                        <IconAction
-                          label="删除"
-                          onClick={() => {
-                            setDeleteTarget(item)
-                          }}
-                          icon={<Trash2 className="text-destructive h-3.5 w-3.5" />}
-                        />
-                      </div>
-                    )}
-                  </div>
-                )
-              })}
-            </div>
-            <div className="mt-3 flex items-center justify-between border-t pt-3 text-xs">
-              <span className="text-muted-foreground">{knowledge.page?.total ?? 0} 个</span>
-              <div className="flex gap-1">
-                <Button
-                  size="sm"
-                  variant="outline"
-                  disabled={page <= 1}
-                  onClick={() => setPage((current) => current - 1)}
-                >
-                  上一页
-                </Button>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  disabled={!knowledge.page || page * PAGE_SIZE >= knowledge.page.total}
-                  onClick={() => setPage((current) => current + 1)}
-                >
-                  下一页
-                </Button>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+        <KnowledgeBaseSidebar
+          userId={userId}
+          knowledgeBases={knowledgeBases}
+          isLoading={knowledge.isLoading}
+          isError={knowledge.isError}
+          total={knowledge.page?.total ?? 0}
+          page={page}
+          hasNextPage={Boolean(knowledge.page && page * PAGE_SIZE < knowledge.page.total)}
+          searchInput={searchInput}
+          status={status}
+          selectedId={selectedId}
+          onSearchInputChange={setSearchInput}
+          onStatusChange={(nextStatus) => {
+            setStatus(nextStatus)
+            setPage(1)
+          }}
+          onPageChange={setPage}
+          onSelect={setSelectedId}
+          onCreate={() => {
+            setEditing(null)
+            setFormOpen(true)
+          }}
+          onEdit={(knowledgeBase) => {
+            setEditing(knowledgeBase)
+            setFormOpen(true)
+          }}
+          onChangeStatus={changeStatus}
+          onDelete={setDeleteTarget}
+          onRetry={knowledge.refetch}
+        />
 
         <main className="min-w-0 overflow-y-auto">
           {!selected ? (
@@ -456,37 +338,6 @@ function Empty({ text, action }: { text: string; action?: () => void }) {
         </Button>
       )}
     </div>
-  )
-}
-function IconAction({
-  label,
-  onClick,
-  icon,
-  disabled
-}: {
-  label: string
-  onClick: () => void
-  icon: React.ReactNode
-  disabled?: boolean
-}) {
-  return (
-    <Tooltip>
-      <TooltipTrigger asChild>
-        <Button
-          size="icon"
-          variant="ghost"
-          className="h-7 w-7"
-          disabled={disabled}
-          onClick={(event) => {
-            event.stopPropagation()
-            onClick()
-          }}
-        >
-          {icon}
-        </Button>
-      </TooltipTrigger>
-      <TooltipContent>{label}</TooltipContent>
-    </Tooltip>
   )
 }
 function DisabledAction({
