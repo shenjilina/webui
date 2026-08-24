@@ -28,12 +28,24 @@ export function DocumentCreateDialog({
   const [title, setTitle] = useState('')
   const [description, setDescription] = useState('')
   const [fileList, setFileList] = useState<UploadedFile[]>([])
+  const [errors, setErrors] = useState({ title: '', description: '', file: '' })
   useEffect(() => {
     if (!open) return
     setTitle('')
     setDescription('')
     setFileList([])
+    setErrors({ title: '', description: '', file: '' })
   }, [open])
+  const handleSubmit = () => {
+    const nextErrors = {
+      title: title.trim() ? '' : '请输入标题',
+      description: description.trim() ? '' : '请输入描述',
+      file: fileList.length > 0 ? '' : '请上传文件'
+    }
+    setErrors(nextErrors)
+    if (Object.values(nextErrors).some(Boolean) || submitting) return
+    onSubmit({ fileId: fileList[0].fileId, title: title.trim(), description: description.trim() })
+  }
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
@@ -46,9 +58,17 @@ export function DocumentCreateDialog({
             <Input
               id="document-title"
               value={title}
-              onChange={(event) => setTitle(event.target.value)}
+              required
+              aria-invalid={Boolean(errors.title)}
+              onChange={(event) => {
+                setTitle(event.target.value)
+                if (errors.title && event.target.value.trim()) {
+                  setErrors((current) => ({ ...current, title: '' }))
+                }
+              }}
               placeholder="留空时使用文件名"
             />
+            {errors.title && <p className="text-destructive text-xs">{errors.title}</p>}
           </div>
           <div className="space-y-2">
             <Label htmlFor="document-description">描述</Label>
@@ -56,21 +76,32 @@ export function DocumentCreateDialog({
               id="document-description"
               className="border-input bg-background min-h-24 w-full rounded-md border px-3 py-2 text-sm"
               value={description}
-              onChange={(event) => setDescription(event.target.value)}
+              required
+              aria-invalid={Boolean(errors.description)}
+              onChange={(event) => {
+                setDescription(event.target.value)
+                if (errors.description && event.target.value.trim()) {
+                  setErrors((current) => ({ ...current, description: '' }))
+                }
+              }}
             />
+            {errors.description && <p className="text-destructive text-xs">{errors.description}</p>}
           </div>
-          <FileUpload fileList={fileList} onFileListChange={setFileList} />
+          <div className="space-y-2">
+            <Label>文件</Label>
+            <FileUpload
+              fileList={fileList}
+              onFileListChange={(files) => {
+                setFileList(files)
+                if (files.length > 0) setErrors((current) => ({ ...current, file: '' }))
+              }}
+            />
+            {errors.file && <p className="text-destructive text-xs">{errors.file}</p>}
+          </div>
           <DialogFooter>
             <Button
-              onClick={() =>
-                fileList[0] &&
-                onSubmit({
-                  fileId: fileList[0].fileId,
-                  title: title.trim() || fileList[0].filename,
-                  description: description.trim()
-                })
-              }
-              disabled={fileList.length === 0 || submitting}
+              onClick={handleSubmit}
+              disabled={submitting}
             >
               {submitting ? '提交中...' : '提交'}
             </Button>

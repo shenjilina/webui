@@ -200,7 +200,7 @@ export default function DocumentListPage() {
             />
           ) : (
             <>
-              <Card className="rounded-lg">
+              <Card className="rounded-lg mb-4">
                 <CardContent className="p-5">
                   <div className="flex flex-wrap items-start justify-between gap-4">
                     <div>
@@ -224,7 +224,7 @@ export default function DocumentListPage() {
                   </div>
                 </CardContent>
               </Card>
-              <Card className="rounded-lg">
+              <Card className="rounded-lg border-none">
                 <CardContent className="p-0">
                   {documents.isError ? (
                     <Empty text="文件或文档加载失败" action={documents.refetch} />
