@@ -1,32 +1,21 @@
-import { get, post, del } from '@/shared/utils/http'
-import type { ChatSession, ChatStreamRequest } from '../types'
+import { post, del } from '@/shared/utils/http'
 import { startSSEStream, type SSEStreamOptions } from '@/shared/utils/sse'
-
-/** 会话列表 */
-export function getChatSessionList(): Promise<ChatSession[]> {
-  return get<ChatSession[]>('/chat/session/list')
+import type { ChatStreamRequest, ConversationRecord } from '../types'
+export function listConversations(userId: number): Promise<ConversationRecord[]> {
+  return post('/conversations/list', { userId })
 }
-
-/** 新建会话 */
-export function createChatSession(): Promise<ChatSession> {
-  return post<ChatSession>('/chat/session/new')
+export function getConversation(conversationId: number): Promise<ConversationRecord> {
+  return post('/conversations/get_conversation', { conversationId })
 }
-
-/** 删除会话 */
-export function deleteChatSession(sessionId: string): Promise<void> {
-  return del<void>(`/chat/session?sessionId=${sessionId}`)
+export function deleteConversation(
+  conversationId: number
+): Promise<{ conversationId: number; deleted: boolean }> {
+  return del('/conversations', { conversationId })
 }
-
-/** 流式问答 */
 export function chatStream(
   data: ChatStreamRequest,
   callbacks: Pick<SSEStreamOptions, 'onMessage' | 'onReferences' | 'onDone' | 'onError'>,
-  signal?: AbortSignal,
+  signal?: AbortSignal
 ): Promise<void> {
-  return startSSEStream({
-    url: '/chat/stream',
-    body: data as unknown as Record<string, unknown>,
-    ...callbacks,
-    signal,
-  })
+  return startSSEStream({ url: '/conversations/ask/stream', body: data, ...callbacks, signal })
 }

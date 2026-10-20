@@ -52,6 +52,7 @@ export function KnowledgeBaseFormDialog({
             <Label htmlFor="knowledge-base-name">名称</Label>
             <Input
               id="knowledge-base-name"
+              maxLength={50}
               value={name}
               onChange={(event) => setName(event.target.value)}
             />
@@ -61,6 +62,7 @@ export function KnowledgeBaseFormDialog({
             <textarea
               id="knowledge-base-description"
               className="border-input bg-background min-h-24 w-full rounded-md border px-3 py-2 text-sm"
+              maxLength={500}
               value={description}
               onChange={(event) => setDescription(event.target.value)}
             />
@@ -82,7 +84,7 @@ export function KnowledgeBaseFormDialog({
               onClick={() =>
                 onSubmit({ name: name.trim(), description: description.trim(), visibility })
               }
-              disabled={submitting || name.trim().length < 2}
+              disabled={submitting || name.trim().length < 1}
             >
               {submitting ? '提交中...' : knowledgeBase ? '保存' : '创建'}
             </Button>

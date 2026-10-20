@@ -17,6 +17,7 @@ import { formatDateTime } from '@/shared/utils/format'
 import { DeleteKnowledgeBaseDialog } from '../components/DeleteKnowledgeBaseDialog'
 import { DocumentCreateDialog } from '../components/DocumentCreateDialog'
 import { DocumentDetailDialog } from '../components/DocumentDetailDialog'
+import { SourceFileManager } from '../components/SourceFileManager'
 import { DocumentFileTable } from '../components/DocumentFileTable'
 import { KnowledgeBaseFormDialog } from '../components/KnowledgeBaseFormDialog'
 import { KnowledgeBaseSidebar } from '../components/KnowledgeBaseSidebar'
@@ -76,30 +77,22 @@ export default function DocumentListPage() {
   const documentByFile = mapDocumentsByFile(documents.documents)
   const isOwner = selected?.ownerId === userId
   const writable = isOwner && selected?.status === 'ACTIVE'
-  const hasProcessing = documents.files.some(isProcessingFile)
+  const hasProcessing =
+    documents.files.some(isProcessingFile) ||
+    documents.documents.some((item) => item.parseStatus === 'PARSING')
   const failedCount = documents.documents.filter(
     (document) => document.parseStatus === 'FAILED'
   ).length
+  const { refetch: refreshSummary } = summaryQuery
   useEffect(() => {
-    if (!selectedId || !hasProcessing) return
-    const refresh = () => {
-      if (document.visibilityState === 'visible') {
-        documents.refetch()
-        summaryQuery.refetch()
-      }
-    }
-    const interval = window.setInterval(refresh, 3000)
-    document.addEventListener('visibilitychange', refresh)
-    return () => {
-      window.clearInterval(interval)
-      document.removeEventListener('visibilitychange', refresh)
-    }
-  }, [selectedId, hasProcessing, documents.refetch, summaryQuery.refetch])
+    if (hasProcessing || selectedId === null) return
+    void refreshSummary()
+  }, [hasProcessing, selectedId, refreshSummary])
 
   const refresh = () => {
     documents.refetch()
-    // summaryQuery.refetch()
-    // knowledge.refetch()
+    void summaryQuery.refetch()
+    void knowledge.refetch()
   }
   const submitKnowledgeBase = (values: {
     name: string
@@ -192,7 +185,7 @@ export default function DocumentListPage() {
         <main className="min-w-0 overflow-y-auto">
           {!selected ? (
             <Empty
-              text="选择或创建一个知识库以开始管理文件"
+              text="选择或创建一个知识库以管理文档，源文件可在下方独立管理"
               action={() => {
                 setEditing(null)
                 setFormOpen(true)
@@ -200,7 +193,7 @@ export default function DocumentListPage() {
             />
           ) : (
             <>
-              <Card className="rounded-lg mb-4">
+              <Card className="mb-4 rounded-lg">
                 <CardContent className="p-5">
                   <div className="flex flex-wrap items-start justify-between gap-4">
                     <div>
@@ -269,15 +262,19 @@ export default function DocumentListPage() {
                       onDeleteDocument={(documentId) =>
                         documents.remove({ documentId }, { onSuccess: refresh })
                       }
-                      onDeleteSource={(fileId) =>
-                        documents.deleteSource({ fileId }, { onSuccess: refresh })
-                      }
                     />
                   )}
                 </CardContent>
               </Card>
             </>
           )}
+          <SourceFileManager
+            files={documents.files}
+            loading={documents.filesLoading}
+            error={documents.filesError}
+            onRefresh={documents.refetch}
+            onDeleteSource={(fileId) => documents.deleteSource({ fileId }, { onSuccess: refresh })}
+          />
         </main>
       </div>
 

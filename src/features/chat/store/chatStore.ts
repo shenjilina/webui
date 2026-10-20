@@ -1,39 +1,54 @@
 import { create } from 'zustand'
-import type { ChatMessage } from '../types'
-
+import type { ChatMessage, ChatSession } from '../types'
+import { conversationMessages } from '../utils'
 interface ChatState {
-  /** 当前会话 ID */
   currentSessionId: string | null
-  /** 当前会话的消息列表 */
+  conversationSessionId: string | null
+  knowledgeBaseId: number | null
   messages: ChatMessage[]
-  /** 是否正在流式输出 */
   isStreaming: boolean
-
-  setCurrentSessionId: (id: string | null) => void
-  /** 支持直接传数组或基于前值的更新函数（与 useState 语义一致） */
-  setMessages: (updater: ChatMessage[] | ((prev: ChatMessage[]) => ChatMessage[])) => void
-  setIsStreaming: (streaming: boolean) => void
-  /** 重置对话（切换/新建会话时调用） */
-  resetConversation: (sessionId?: string | null) => void
+  isDeleting: boolean
+  setIsDeleting: (value: boolean) => void
+  setMessages: (updater: ChatMessage[] | ((previous: ChatMessage[]) => ChatMessage[])) => void
+  setIsStreaming: (value: boolean) => void
+  newSession: (knowledgeBaseId?: number | null) => void
+  selectSession: (session: ChatSession) => void
+  reset: () => void
 }
-
-/**
- * 聊天全局状态：会话选择与对话内容存于 store，
- * 供布局层会话面板与聊天页共享，跨页面切换不丢失。
- */
-export const useChatStore = create<ChatState>()((set) => ({
+const empty = {
   currentSessionId: null,
-  messages: [],
+  conversationSessionId: null,
+  knowledgeBaseId: null,
+  messages: [] as ChatMessage[],
   isStreaming: false,
-
-  setCurrentSessionId: (id) => set({ currentSessionId: id }),
-
+  isDeleting: false
+}
+export const useChatStore = create<ChatState>()((set, get) => ({
+  ...empty,
   setMessages: (updater) =>
     set((state) => ({
-      messages: typeof updater === 'function' ? updater(state.messages) : updater,
+      messages: typeof updater === 'function' ? updater(state.messages) : updater
     })),
-
-  setIsStreaming: (streaming) => set({ isStreaming: streaming }),
-
-  resetConversation: (sessionId = null) => set({ currentSessionId: sessionId, messages: [] }),
+  setIsStreaming: (isStreaming) => set({ isStreaming }),
+  setIsDeleting: (isDeleting) => set({ isDeleting }),
+  newSession: (knowledgeBaseId = get().knowledgeBaseId) => {
+    if (get().isStreaming || get().isDeleting) return
+    const sessionId = crypto.randomUUID()
+    set({
+      ...empty,
+      knowledgeBaseId,
+      conversationSessionId: sessionId,
+      currentSessionId: knowledgeBaseId === null ? sessionId : knowledgeBaseId + ':' + sessionId
+    })
+  },
+  selectSession: (session) => {
+    if (!get().isStreaming && !get().isDeleting)
+      set({
+        currentSessionId: session.id,
+        conversationSessionId: session.sessionId,
+        knowledgeBaseId: session.knowledgeBaseId,
+        messages: conversationMessages(session.records)
+      })
+  },
+  reset: () => set({ ...empty })
 }))

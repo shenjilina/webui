@@ -25,7 +25,7 @@ export const ALLOWED_MIME_TYPES = {
   'application/pdf': '.pdf'
 } as const
 
-/** 最大上传文件大小（10MB） */
+/** 最大上传文件大小（100MB，后端默认值） */
 export const MAX_FILE_SIZE = 100 * 1024 * 1024
 
 /** 分页默认值 */

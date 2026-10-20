@@ -15,13 +15,16 @@ const queryClient = new QueryClient({
       staleTime: 30_000,
       retry: 1,
       refetchOnWindowFocus: true,
-      refetchInterval: false,
+      refetchInterval: false
     },
     mutations: {
-      retry: 0,
-    },
-  },
+      retry: 0
+    }
+  }
 })
+
+window.addEventListener('auth:logout', () => queryClient.clear())
+window.addEventListener('auth:unauthorized', () => queryClient.clear())
 
 /** 应用标题（由环境变量注入） */
 document.title = APP_TITLE
@@ -44,7 +47,7 @@ async function bootstrap() {
           <Toaster position="bottom-right" richColors closeButton />
         </QueryClientProvider>
       </ErrorBoundary>
-    </StrictMode>,
+    </StrictMode>
   )
 }
 

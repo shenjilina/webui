@@ -1,29 +1,32 @@
-import { useMutation } from '@tanstack/react-query'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 import { toast } from 'sonner'
 import {
+  fetchRegister,
   fetchLogin,
   fetchLogout,
   fetchUserInfo as fetchUserInfoApi,
-  fetchChangePassword,
+  fetchChangePassword
 } from '../api'
 import { useUserStore } from '../store/userStore'
-import type { LoginRequest, ChangePasswordRequest } from '../types'
+import type { LoginRequest, ChangePasswordRequest, RegisterRequest } from '../types'
 
 export function useAuth() {
   const navigate = useNavigate()
+  const queryClient = useQueryClient()
   const { login: storeLogin, logout: storeLogout, isLogin, userInfo, token } = useUserStore()
 
   const loginMutation = useMutation({
     mutationFn: (data: LoginRequest) => fetchLogin(data),
     onSuccess: async (res) => {
+      queryClient.clear()
       storeLogin(res.accessToken, {
         id: res.userId,
         username: res.username,
         email: res.email,
         isActive: true,
         createdAt: '',
-        updatedAt: '',
+        updatedAt: ''
       })
 
       try {
@@ -36,27 +39,33 @@ export function useAuth() {
 
       toast.success('登录成功')
       navigate('/')
-    },
+    }
     // onError: (err: Error) => {
     //   toast.error(err || '登录失败')
     // },
   })
 
+  const registerMutation = useMutation({
+    mutationFn: fetchRegister,
+    onSuccess: () => toast.success('注册成功，请使用新账号登录')
+  })
   const logoutMutation = useMutation({
     mutationFn: fetchLogout,
     onSettled: () => {
+      queryClient.clear()
       storeLogout()
       navigate('/login')
-    },
+    }
   })
 
   const changePasswordMutation = useMutation({
     mutationFn: (data: ChangePasswordRequest) => fetchChangePassword(data),
     onSuccess: () => {
       toast.success('密码修改成功，请重新登录')
+      queryClient.clear()
       storeLogout()
       navigate('/login')
-    },
+    }
   })
 
   const fetchUserInfo = async () => {
@@ -69,6 +78,9 @@ export function useAuth() {
   }
 
   return {
+    register: (data: RegisterRequest, onSuccess: () => void) =>
+      registerMutation.mutate(data, { onSuccess }),
+    isRegistering: registerMutation.isPending,
     login: loginMutation.mutate,
     isLoggingIn: loginMutation.isPending,
     logout: logoutMutation.mutate,
@@ -78,6 +90,6 @@ export function useAuth() {
     fetchUserInfo,
     isLogin,
     userInfo,
-    token,
+    token
   }
 }

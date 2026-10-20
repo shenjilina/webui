@@ -1,9 +1,10 @@
 import { get, post } from '@/shared/utils/http'
 import type {
+  RegisterRequest,
   LoginRequest,
   LoginResponse,
   UserInfo,
-  ChangePasswordRequest,
+  ChangePasswordRequest
 } from '../types'
 
 /** 登录 */
@@ -24,4 +25,8 @@ export function fetchUserInfo(): Promise<UserInfo> {
 /** 修改密码 */
 export function fetchChangePassword(data: ChangePasswordRequest): Promise<void> {
   return post<void>('/auth/change-password', data)
+}
+
+export function fetchRegister(data: RegisterRequest): Promise<UserInfo> {
+  return post('/auth/register', data)
 }

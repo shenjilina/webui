@@ -1,66 +1,64 @@
 import { useQuery } from '@tanstack/react-query'
-import { getDocumentDetail, listDocumentChunks } from '../api'
+import { getDocumentDetail } from '../api'
 import type { DocumentInfo } from '../types'
+import { DocumentChunks } from './DocumentChunks'
+import { Button } from '@/shared/components/ui/button'
 import { Badge } from '@/shared/components/ui/badge'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/shared/components/ui/dialog'
 import { formatDateTime } from '@/shared/utils/format'
-
-interface DocumentDetailDialogProps {
+interface Props {
   document: DocumentInfo | null
   onOpenChange: (open: boolean) => void
 }
-
-export function DocumentDetailDialog({ document, onOpenChange }: DocumentDetailDialogProps) {
-  const detailQuery = useQuery({
+export function DocumentDetailDialog({ document, onOpenChange }: Props) {
+  const query = useQuery({
     queryKey: ['document-detail', document?.id],
     queryFn: () => getDocumentDetail({ documentId: document!.id }),
-    enabled: document !== null
+    enabled: document !== null,
+    refetchOnMount: 'always',
+    refetchInterval: (query) => (query.state.data?.parseStatus === 'PARSING' ? 3000 : false)
   })
-  const parseStatus = detailQuery.data?.parseStatus ?? document?.parseStatus
-  const chunksQuery = useQuery({
-    queryKey: ['document-chunks', document?.id],
-    queryFn: () => listDocumentChunks(document!.id),
-    enabled: parseStatus === 'SUCCESS'
-  })
+  const detail = query.data ?? document
   return (
-    <Dialog open={document !== null} onOpenChange={onOpenChange}>
+    <Dialog open={!!document} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-3xl">
         <DialogHeader>
-          <DialogTitle>解析详情</DialogTitle>
+          <DialogTitle>文档详情与分块</DialogTitle>
         </DialogHeader>
-        {document && (
+        {query.isLoading && <p className="text-muted-foreground text-sm">刷新详情中…</p>}
+        {query.isError && (
+          <p role="alert" className="text-destructive text-sm">
+            详情加载失败{' '}
+            <Button variant="outline" size="sm" onClick={() => void query.refetch()}>
+              重试
+            </Button>
+          </p>
+        )}
+        {detail && (
           <div className="space-y-4">
-            <div className="grid grid-cols-2 gap-3 text-sm">
-              <p>标题：{detailQuery.data?.title ?? document.title}</p>
+            <div className="grid gap-3 text-sm sm:grid-cols-2">
+              <p>标题：{detail.title}</p>
               <p>
-                状态：
-                <Badge variant={parseStatus === 'FAILED' ? 'destructive' : 'secondary'}>
-                  {parseStatus}
+                解析状态：
+                <Badge variant={detail.parseStatus === 'FAILED' ? 'destructive' : 'secondary'}>
+                  {detail.parseStatus}
                 </Badge>
               </p>
-              <p>分片数：{detailQuery.data?.chunkCount ?? document.chunkCount}</p>
-              <p>创建时间：{formatDateTime(document.createdAt)}</p>
+              <p>分块数：{detail.chunkCount}</p>
+              <p>创建时间：{formatDateTime(detail.createdAt)}</p>
+              <p>文件 ID：{detail.fileId}</p>
+              <p>知识库 ID：{detail.knowledgeBaseId}</p>
             </div>
-            {parseStatus === 'FAILED' && (
-              <div className="bg-destructive/10 text-destructive rounded-md p-3 text-sm">
-                {detailQuery.data?.errorMsg || document.errorMsg || '未返回错误日志'}
-              </div>
+            {detail.description && <p className="text-sm">{detail.description}</p>}
+            {detail.parseStatus === 'FAILED' && (
+              <p role="alert" className="text-destructive text-sm">
+                {detail.errorMsg || '解析失败，请重试'}
+              </p>
             )}
-            {parseStatus === 'SUCCESS' && (
-              <div>
-                <p className="mb-2 text-sm font-medium">切片预览</p>
-                <div className="max-h-72 space-y-2 overflow-y-auto">
-                  {chunksQuery.data?.items.map((chunk) => (
-                    <div key={chunk.id} className="bg-muted rounded-md p-3 text-sm">
-                      <p className="text-muted-foreground mb-1 text-xs">切片 {chunk.chunkIndex}</p>
-                      <p className="whitespace-pre-wrap">{chunk.content}</p>
-                    </div>
-                  ))}
-                  {chunksQuery.isLoading && (
-                    <p className="text-muted-foreground text-sm">加载切片中...</p>
-                  )}
-                </div>
-              </div>
+            {detail.parseStatus === 'SUCCESS' ? (
+              <DocumentChunks key={detail.id} documentId={detail.id} />
+            ) : (
+              <p className="text-muted-foreground text-sm">解析成功后可查看分块</p>
             )}
           </div>
         )}

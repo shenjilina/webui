@@ -1,3 +1,4 @@
+import { getDataTableValue } from './utils'
 import { RefreshCw } from 'lucide-react'
 import type { ReactNode } from 'react'
 import { Button } from '../button'
@@ -39,10 +40,6 @@ export interface DataTableProps<T> {
   toolbarRightSlot?: ReactNode
   onRefresh?: () => void
   onPaginationChange?: (pagination: Pick<DataTablePagination, 'page' | 'pageSize'>) => void
-}
-
-export function getDataTableValue<T>(row: T, accessor?: keyof T): unknown {
-  return accessor ? row[accessor] : undefined
 }
 
 export function DataTable<T>({

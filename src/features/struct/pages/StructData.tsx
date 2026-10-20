@@ -1,194 +1,125 @@
 import { useState } from 'react'
-import { Plus, Search, Trash2, Pencil, Database } from 'lucide-react'
+import { useQuery } from '@tanstack/react-query'
+import { listAllKnowledgeBases } from '@/features/knowledge/api'
+import { listDocuments } from '@/features/document/api'
+import { DocumentChunks } from '@/features/document/components/DocumentChunks'
 import { Button } from '@/shared/components/ui/button'
-import { Input } from '@/shared/components/ui/input'
-import { Label } from '@/shared/components/ui/label'
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-  DialogFooter,
-} from '@/shared/components/ui/dialog'
-import { useStructData } from '../hooks/useStructData'
-import { DEFAULT_PAGE_SIZE } from '@/shared/utils/constants'
-import { formatDateTime } from '@/shared/utils/format'
-
 export default function StructDataPage() {
+  const [knowledgeBaseId, setKnowledgeBaseId] = useState<number | null>(null)
+  const [documentId, setDocumentId] = useState<number | null>(null)
   const [page, setPage] = useState(1)
-  const [keyword, setKeyword] = useState('')
-  const [showCreateDialog, setShowCreateDialog] = useState(false)
-  const [editingItem, setEditingItem] = useState<{ id: string; key: string; value: string; metadata?: string } | null>(null)
-  const [newKey, setNewKey] = useState('')
-  const [newValue, setNewValue] = useState('')
-  const [newMeta, setNewMeta] = useState('')
-
-  const { list, isLoading, createItem, updateItem, deleteItem } = useStructData({
-    page,
-    pageSize: DEFAULT_PAGE_SIZE,
-    keyword: keyword || undefined,
+  const bases = useQuery({ queryKey: ['knowledge-bases', 'all'], queryFn: listAllKnowledgeBases })
+  const docs = useQuery({
+    queryKey: ['chunk-documents', knowledgeBaseId, page],
+    queryFn: () => listDocuments({ knowledgeBaseId: knowledgeBaseId!, page, pageSize: 20 }),
+    enabled: knowledgeBaseId !== null
   })
-
-  const items = list?.list ?? []
-  const total = list?.total ?? 0
-  const totalPages = Math.ceil(total / DEFAULT_PAGE_SIZE)
-
-  const handleCreate = () => {
-    if (!newKey.trim() || !newValue.trim()) return
-    createItem({ key: newKey, value: newValue, metadata: newMeta || undefined })
-    setShowCreateDialog(false)
-    setNewKey('')
-    setNewValue('')
-    setNewMeta('')
-  }
-
-  const handleEdit = () => {
-    if (!editingItem || !editingItem.key.trim()) return
-    updateItem({ id: editingItem.id, data: { key: editingItem.key, value: editingItem.value, metadata: editingItem.metadata } })
-    setEditingItem(null)
-  }
-
+  const selected = docs.data?.items.find((item) => item.id === documentId)
   return (
-    <div className="space-y-6 p-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold">结构化数据管理</h1>
-        <Button onClick={() => setShowCreateDialog(true)}>
-          <Plus className="h-4 w-4" />
-          新增条目
-        </Button>
+    <div className="mx-auto max-w-5xl space-y-6 p-6">
+      <header>
+        <h1 className="text-2xl font-semibold">文档分块查看</h1>
+        <p className="text-muted-foreground mt-2 text-sm">
+          查看后端解析生成的真实文档片段。分块只读，解析和向量维护由后端处理。
+        </p>
+      </header>
+      <div className="grid gap-4 sm:grid-cols-2">
+        <label className="space-y-2 text-sm">
+          <span>知识库</span>
+          <select
+            aria-label="分块知识库"
+            className="bg-background block w-full rounded-md border p-2"
+            value={knowledgeBaseId ?? ''}
+            onChange={(e) => {
+              setKnowledgeBaseId(e.target.value ? Number(e.target.value) : null)
+              setDocumentId(null)
+              setPage(1)
+            }}
+          >
+            <option value="">请选择知识库</option>
+            {bases.data?.map((base) => (
+              <option key={base.id} value={base.id}>
+                {base.name}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="space-y-2 text-sm">
+          <span>文档</span>
+          <select
+            aria-label="分块文档"
+            disabled={!knowledgeBaseId || docs.isLoading}
+            className="bg-background block w-full rounded-md border p-2"
+            value={documentId ?? ''}
+            onChange={(e) => setDocumentId(e.target.value ? Number(e.target.value) : null)}
+          >
+            <option value="">请选择文档</option>
+            {docs.data?.items.map((doc) => (
+              <option key={doc.id} value={doc.id}>
+                {doc.title}（{doc.parseStatus}）
+              </option>
+            ))}
+          </select>
+        </label>
       </div>
-
-      <div className="relative max-w-sm">
-        <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-        <Input
-          placeholder="搜索..."
-          value={keyword}
-          onChange={(e) => { setKeyword(e.target.value); setPage(1) }}
-          className="pl-9"
-        />
-      </div>
-
-      <div className="rounded-xl border bg-card">
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead>
-              <tr className="border-b bg-muted/50">
-                <th className="px-4 py-3 text-left text-sm font-medium text-muted-foreground">键</th>
-                <th className="px-4 py-3 text-left text-sm font-medium text-muted-foreground">值</th>
-                <th className="px-4 py-3 text-left text-sm font-medium text-muted-foreground">更新时间</th>
-                <th className="px-4 py-3 text-right text-sm font-medium text-muted-foreground">操作</th>
-              </tr>
-            </thead>
-            <tbody>
-              {isLoading ? (
-                <tr><td colSpan={4} className="px-4 py-12 text-center text-muted-foreground">加载中...</td></tr>
-              ) : items.length === 0 ? (
-                <tr>
-                  <td colSpan={4} className="px-4 py-12">
-                    <div className="flex flex-col items-center gap-2 text-muted-foreground">
-                      <Database className="h-8 w-8" />
-                      <p className="text-sm">暂无数据</p>
-                    </div>
-                  </td>
-                </tr>
-              ) : (
-                items.map((item) => (
-                  <tr key={item.id} className="border-b last:border-0 hover:bg-muted/30 transition-colors">
-                    <td className="px-4 py-3 text-sm font-mono font-medium">{item.key}</td>
-                    <td className="px-4 py-3 text-sm text-muted-foreground max-w-xs truncate">{item.value}</td>
-                    <td className="px-4 py-3 text-sm text-muted-foreground">{formatDateTime(item.updatedAt)}</td>
-                    <td className="px-4 py-3">
-                      <div className="flex justify-end gap-1">
-                        <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setEditingItem(item)}>
-                          <Pencil className="h-4 w-4" />
-                        </Button>
-                        <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => { if (confirm('确认删除？')) deleteItem(item.id) }}>
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
+      {(bases.isLoading || docs.isLoading) && (
+        <p className="text-muted-foreground text-sm">加载中…</p>
+      )}
+      {(bases.isError || docs.isError) && (
+        <div role="alert" className="text-destructive text-sm">
+          加载失败{' '}
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              void bases.refetch()
+              if (knowledgeBaseId) void docs.refetch()
+            }}
+          >
+            重试
+          </Button>
         </div>
-        {totalPages > 1 && (
-          <div className="flex items-center justify-between border-t px-4 py-3">
-            <p className="text-sm text-muted-foreground">共 {total} 条</p>
-            <div className="flex gap-1">
-              <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => setPage(page - 1)}>上一页</Button>
-              <span className="flex items-center px-3 text-sm">{page} / {totalPages}</span>
-              <Button variant="outline" size="sm" disabled={page >= totalPages} onClick={() => setPage(page + 1)}>下一页</Button>
-            </div>
-          </div>
-        )}
-      </div>
-
-      {/* Create Dialog */}
-      <Dialog open={showCreateDialog} onOpenChange={setShowCreateDialog}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>新增条目</DialogTitle>
-            <DialogDescription>添加结构化数据条目</DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div className="space-y-2">
-              <Label>键 (Key)</Label>
-              <Input value={newKey} onChange={(e) => setNewKey(e.target.value)} placeholder="数据键" />
-            </div>
-            <div className="space-y-2">
-              <Label>值 (Value)</Label>
-              <textarea
-                className="flex min-h-[120px] w-full rounded-lg border border-input bg-background px-3 py-2 text-sm"
-                value={newValue}
-                onChange={(e) => setNewValue(e.target.value)}
-                placeholder="数据值"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label>元数据 (可选)</Label>
-              <Input value={newMeta} onChange={(e) => setNewMeta(e.target.value)} placeholder="JSON 格式元数据" />
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowCreateDialog(false)}>取消</Button>
-            <Button onClick={handleCreate} disabled={!newKey.trim() || !newValue.trim()}>创建</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Edit Dialog */}
-      <Dialog open={!!editingItem} onOpenChange={(open) => !open && setEditingItem(null)}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>编辑条目</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div className="space-y-2">
-              <Label>键</Label>
-              <Input value={editingItem?.key || ''} onChange={(e) => setEditingItem(editingItem ? { ...editingItem, key: e.target.value } : null)} />
-            </div>
-            <div className="space-y-2">
-              <Label>值</Label>
-              <textarea
-                className="flex min-h-[120px] w-full rounded-lg border border-input bg-background px-3 py-2 text-sm"
-                value={editingItem?.value || ''}
-                onChange={(e) => setEditingItem(editingItem ? { ...editingItem, value: e.target.value } : null)}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label>元数据</Label>
-              <Input value={editingItem?.metadata || ''} onChange={(e) => setEditingItem(editingItem ? { ...editingItem, metadata: e.target.value } : null)} />
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setEditingItem(null)}>取消</Button>
-            <Button onClick={handleEdit}>保存</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      )}
+      {docs.data && (
+        <div className="flex justify-end gap-3 text-sm">
+          <span>
+            文档共 {docs.data.total} 条 · 第 {page} 页
+          </span>
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={page <= 1 || docs.isFetching}
+            onClick={() => {
+              setPage((p) => p - 1)
+              setDocumentId(null)
+            }}
+          >
+            上一页
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={page * 20 >= docs.data.total || docs.isFetching}
+            onClick={() => {
+              setPage((p) => p + 1)
+              setDocumentId(null)
+            }}
+          >
+            下一页
+          </Button>
+        </div>
+      )}
+      {selected?.parseStatus === 'SUCCESS' ? (
+        <DocumentChunks key={selected.id} documentId={selected.id} />
+      ) : (
+        <p className="text-muted-foreground rounded-lg border p-8 text-center text-sm">
+          {selected
+            ? selected.errorMsg || '该文档尚未解析成功，请到文档管理启动解析'
+            : docs.data?.total === 0
+              ? '当前知识库暂无文档'
+              : '选择知识库和文档后查看分块'}
+        </p>
+      )}
     </div>
   )
 }

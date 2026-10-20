@@ -74,7 +74,6 @@ export interface DocumentListRequest {
 }
 
 export interface FileListRequest {
-  knowledgeBaseId: number
   fileStatus?: FileStatus | null
   page?: number
   pageSize?: number

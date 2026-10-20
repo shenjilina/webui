@@ -1,116 +1,115 @@
 import { useCallback } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { chatStream } from '../api'
 import { useChatStore } from '../store/chatStore'
+import { useUserStore } from '@/features/auth/store/userStore'
 import type { ChatMessage } from '../types'
-
 export type { ChatMessage } from '../types'
-
-// 模块级流式控制器：聊天页卸载后流式请求继续进行，结果仍写入全局 store
-let abortController: AbortController | null = null
-
-/**
- * 聊天对话逻辑：消息收发与流式控制。
- * 对话状态存于全局 chatStore，跨页面切换不丢失。
- */
-export function useChat() {
-  const currentSessionId = useChatStore((s) => s.currentSessionId)
-  const messages = useChatStore((s) => s.messages)
-  const isStreaming = useChatStore((s) => s.isStreaming)
-
-  const sendMessage = useCallback(
-    async (question: string, documentIds?: string[]) => {
-      const store = useChatStore.getState()
-      if (!store.currentSessionId || store.isStreaming) return
-
-      const userMsg: ChatMessage = {
-        id: `user-${Date.now()}`,
-        role: 'user',
-        content: question
-      }
-
-      const assistantMsg: ChatMessage = {
-        id: `assistant-${Date.now()}`,
-        role: 'assistant',
-        content: '',
-        isStreaming: true
-      }
-
-      store.setMessages((prev) => [...prev, userMsg, assistantMsg])
-      store.setIsStreaming(true)
-
-      const controller = new AbortController()
-      abortController = controller
-
-      await chatStream(
-        {
-          sessionId: store.currentSessionId,
-          question,
-          documentIds
-        },
-        {
-          onMessage: (content) => {
-            useChatStore.getState().setMessages((prev) => {
-              const last = prev[prev.length - 1]
-              if (!last || last.role !== 'assistant') return prev
-              return [...prev.slice(0, -1), { ...last, content: last.content + content }]
-            })
-          },
-          onReferences: (items) => {
-            useChatStore.getState().setMessages((prev) => {
-              const last = prev[prev.length - 1]
-              if (!last || last.role !== 'assistant') return prev
-              return [...prev.slice(0, -1), { ...last, references: items }]
-            })
-          },
-          onDone: () => {
-            const s = useChatStore.getState()
-            s.setMessages((prev) => {
-              const last = prev[prev.length - 1]
-              if (!last || last.role !== 'assistant') return prev
-              return [...prev.slice(0, -1), { ...last, isStreaming: false }]
-            })
-            s.setIsStreaming(false)
-            abortController = null
-          },
-          onError: (message) => {
-            const s = useChatStore.getState()
-            s.setMessages((prev) => {
-              const last = prev[prev.length - 1]
-              if (!last || last.role !== 'assistant') return prev
-              return [
-                ...prev.slice(0, -1),
-                { ...last, content: last.content || `问答异常: ${message}`, isStreaming: false }
-              ]
-            })
-            s.setIsStreaming(false)
-            abortController = null
-            toast.error(message)
+let activeController: AbortController | null = null
+export function stopChatStream() {
+  activeController?.abort()
+  activeController = null
+  const store = useChatStore.getState()
+  store.setMessages((messages) =>
+    messages.map((message) =>
+      message.isStreaming
+        ? {
+            ...message,
+            isStreaming: false,
+            error: '已停止生成；服务端可能仍保存记录，请刷新历史确认'
           }
-        },
-        controller.signal
-      )
-    },
-    [currentSessionId, isStreaming]
+        : message
+    )
   )
-
-  const stopStreaming = useCallback(() => {
-    abortController?.abort()
-    abortController = null
-    const store = useChatStore.getState()
-    store.setMessages((prev) => {
-      const last = prev[prev.length - 1]
-      if (!last || last.role !== 'assistant') return prev
-      return [...prev.slice(0, -1), { ...last, isStreaming: false }]
-    })
-    store.setIsStreaming(false)
-  }, [])
-
-  return {
-    currentSessionId,
-    messages,
-    isStreaming,
-    sendMessage,
-    stopStreaming
+  store.setIsStreaming(false)
+}
+if (typeof window !== 'undefined') {
+  const clear = () => {
+    stopChatStream()
+    useChatStore.getState().reset()
   }
+  window.addEventListener('auth:unauthorized', clear)
+  window.addEventListener('auth:logout', clear)
+}
+export function useChat() {
+  const state = useChatStore()
+  const client = useQueryClient()
+  const sendMessage = useCallback(
+    async (question: string, knowledgeBaseId: number, topK = 4) => {
+      const userId = useUserStore.getState().userInfo?.id
+      const store = useChatStore.getState()
+      if (!userId || store.isStreaming || store.isDeleting) return
+      question = question.trim()
+      if (!question || question.length > 2000 || !Number.isInteger(topK) || topK < 1 || topK > 20) {
+        toast.error('问题需为 1–2000 字，TopK 需为 1–20')
+        return
+      }
+      if (
+        !store.currentSessionId ||
+        store.knowledgeBaseId !== knowledgeBaseId ||
+        !store.conversationSessionId
+      )
+        store.newSession(knowledgeBaseId)
+      const session = useChatStore.getState()
+      const sessionId = session.currentSessionId
+      const assistantId = crypto.randomUUID()
+      session.setMessages((messages) => [
+        ...messages,
+        { id: crypto.randomUUID(), role: 'user', content: question },
+        { id: assistantId, role: 'assistant', content: '', isStreaming: true }
+      ])
+      session.setIsStreaming(true)
+      const controller = new AbortController()
+      activeController = controller
+      const update = (fn: (message: ChatMessage) => ChatMessage) => {
+        if (controller.signal.aborted || useChatStore.getState().currentSessionId !== sessionId)
+          return
+        useChatStore
+          .getState()
+          .setMessages((messages) =>
+            messages.map((message) => (message.id === assistantId ? fn(message) : message))
+          )
+      }
+      try {
+        await chatStream(
+          {
+            userId,
+            knowledgeBaseId,
+            question,
+            topK,
+            conversation_session_id: session.conversationSessionId!
+          },
+          {
+            onMessage: (content) =>
+              update((message) => ({ ...message, content: message.content + content })),
+            onReferences: (references) => update((message) => ({ ...message, references })),
+            onError: (error) => {
+              if (controller.signal.aborted) return
+              update((message) => ({ ...message, error }))
+              toast.error(error)
+            },
+            onDone: (result) =>
+              update((message) => ({
+                ...message,
+                content: result.answer || message.content,
+                conversationId: result.conversationId ?? undefined,
+                isStreaming: false
+              }))
+          },
+          controller.signal
+        )
+      } finally {
+        if (activeController === controller) {
+          update((message) => ({ ...message, isStreaming: false }))
+          useChatStore.getState().setIsStreaming(false)
+          activeController = null
+        }
+        if (useUserStore.getState().userInfo?.id === userId)
+          void client.invalidateQueries({ queryKey: ['chat-sessions', userId] })
+      }
+    },
+    [client]
+  )
+  return { ...state, sendMessage, stopStreaming: stopChatStream }
 }

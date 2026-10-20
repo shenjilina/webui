@@ -1,4 +1,5 @@
 import { post } from '@/shared/utils/http'
+import { collectPages } from '@/shared/utils/pagination'
 import type {
   ChunkInfo,
   DocumentCreateRequest,
@@ -21,7 +22,12 @@ export function uploadFiles(files: File[]): Promise<FileUploadResult[]> {
 }
 
 export function listFiles(data: FileListRequest): Promise<PageResponse<FileInfo>> {
-  return post<PageResponse<FileInfo>>('/files/list', data)
+  const { fileStatus, page, pageSize } = data
+  return post<PageResponse<FileInfo>>('/files/list', {
+    ...(fileStatus !== undefined ? { fileStatus } : {}),
+    ...(page !== undefined ? { page } : {}),
+    ...(pageSize !== undefined ? { pageSize } : {})
+  })
 }
 
 export function getFileDetail(data: FileIdRequest): Promise<FileInfo> {
@@ -64,4 +70,11 @@ export function listDocumentChunks(
   pageSize = 20
 ): Promise<PageResponse<ChunkInfo>> {
   return post<PageResponse<ChunkInfo>>('/documents/chunks', { documentId, page, pageSize })
+}
+
+export function listAllFiles(): Promise<FileInfo[]> {
+  return collectPages((page) => listFiles({ page, pageSize: 100 }))
+}
+export function listAllDocuments(knowledgeBaseId: number): Promise<DocumentInfo[]> {
+  return collectPages((page) => listDocuments({ knowledgeBaseId, page, pageSize: 100 }))
 }

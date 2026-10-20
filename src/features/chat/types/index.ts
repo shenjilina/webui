@@ -1,31 +1,43 @@
-/** 会话信息 */
+export interface ConversationRecord {
+  id: number
+  userId: number
+  knowledgeBaseId: number
+  question: string
+  answer: string
+  sourceDocumentIds: number[]
+  sessionId: string | null
+  status: 'generated' | 'failed'
+  createdAt: string
+}
 export interface ChatSession {
   id: string
+  sessionId: string | null
+  knowledgeBaseId: number
   title: string
+  records: ConversationRecord[]
   createdAt: string
   updatedAt: string
 }
-
-/** 流式问答请求 */
 export interface ChatStreamRequest {
-  sessionId: string
+  userId: number
+  knowledgeBaseId: number
   question: string
-  documentIds?: string[]
+  topK?: number
+  conversation_session_id?: string
 }
-
-/** 溯源引用 */
 export interface ReferenceItem {
   documentId: string
   title: string
   snippet: string
-  score: number
+  score: number | null
 }
-
-/** 对话消息 */
 export interface ChatMessage {
   id: string
   role: 'user' | 'assistant'
   content: string
   references?: ReferenceItem[]
+  sourceDocumentIds?: number[]
+  conversationId?: number
   isStreaming?: boolean
+  error?: string
 }

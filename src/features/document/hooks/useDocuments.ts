@@ -4,32 +4,41 @@ import {
   createDocument,
   deleteDocument,
   deleteFileSource,
-  listDocuments,
-  listFiles,
+  listAllDocuments,
+  listAllFiles,
   parseDocument,
   retryDocuments
 } from '../api'
-import type { DocumentInfo, FileInfo } from '../types'
+import { useUserStore } from '@/features/auth/store/userStore'
 
 const documentKey = (knowledgeBaseId: number | null) => ['documents', knowledgeBaseId] as const
-const fileKey = (knowledgeBaseId: number | null) => ['files', knowledgeBaseId] as const
+const fileKey = (userId: number | undefined) => ['files', userId] as const
 
 export function useDocuments(knowledgeBaseId: number | null) {
   const queryClient = useQueryClient()
+  const userId = useUserStore((state) => state.userInfo?.id)
   const enabled = knowledgeBaseId !== null
   const documentQuery = useQuery({
     queryKey: documentKey(knowledgeBaseId),
-    queryFn: () => listDocuments({ knowledgeBaseId: knowledgeBaseId!, pageSize: 100 }),
-    enabled
+    queryFn: () => listAllDocuments(knowledgeBaseId!),
+    enabled,
+    refetchInterval: (query) =>
+      query.state.data?.some((item) => item.parseStatus === 'PARSING') ? 3000 : false
   })
   const fileQuery = useQuery({
-    queryKey: fileKey(knowledgeBaseId),
-    queryFn: () => listFiles({ knowledgeBaseId: knowledgeBaseId!, pageSize: 100 }),
-    enabled
+    queryKey: fileKey(userId),
+    queryFn: () => listAllFiles(),
+    refetchInterval: (query) =>
+      query.state.data?.some((item) => item.status === 'PARSING' || item.status === 'PARSE_PENDING')
+        ? 3000
+        : false,
+    enabled: !!userId
   })
   const invalidate = () => {
+    queryClient.invalidateQueries({ queryKey: ['document-detail'] })
+    queryClient.invalidateQueries({ queryKey: ['document-chunks'] })
     queryClient.invalidateQueries({ queryKey: documentKey(knowledgeBaseId) })
-    // queryClient.invalidateQueries({ queryKey: fileKey(knowledgeBaseId) })
+    queryClient.invalidateQueries({ queryKey: fileKey(userId) })
     queryClient.invalidateQueries({ queryKey: ['knowledge-base-summary', knowledgeBaseId] })
   }
   const createMutation = useMutation({
@@ -69,12 +78,14 @@ export function useDocuments(knowledgeBaseId: number | null) {
   })
 
   return {
-    list: documentQuery.data?.items ?? [],
-    files: fileQuery.data?.items ?? ([] as FileInfo[]),
-    documents: documentQuery.data?.items ?? ([] as DocumentInfo[]),
+    list: documentQuery.data ?? [],
+    files: fileQuery.data ?? [],
+    documents: documentQuery.data ?? [],
     isLoading: documentQuery.isLoading || fileQuery.isLoading,
     isFetching: documentQuery.isFetching || fileQuery.isFetching,
-    isError: documentQuery.isError || fileQuery.isError,
+    isError: documentQuery.isError,
+    filesError: fileQuery.isError,
+    filesLoading: fileQuery.isLoading || fileQuery.isFetching,
     refetch: invalidate,
     create: createMutation.mutate,
     isCreating: createMutation.isPending,

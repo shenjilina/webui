@@ -1,318 +1,222 @@
-import { useState, useRef, useEffect } from 'react'
-import { useNavigate } from 'react-router-dom'
-import {
-  Send,
-  Square,
-  BookOpen,
-  Plus,
-  Folder,
-  ChevronDown,
-  Check,
-  Sparkles,
-  FileText,
-  ListOrdered
-} from 'lucide-react'
+import { useEffect, useRef, useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
+import { Link } from 'react-router-dom'
+import { BookOpen, Send, Square } from 'lucide-react'
 import { Button } from '@/shared/components/ui/button'
-import { ScrollArea } from '@/shared/components/ui/scroll-area'
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/shared/components/ui/tooltip'
+import { listAllKnowledgeBases } from '@/features/knowledge/api'
 import { MarkdownRenderer } from './MarkdownRenderer'
-import { useKnowledgeBases } from '@/features/knowledge/hooks/useKnowledgeBases'
-import { useDocuments } from '@/features/document/hooks/useDocuments'
-import { cn } from '@/shared/lib/utils'
-import type { ChatMessage } from '../hooks/useChat'
-import type { ReferenceItem } from '../types'
-
-/** 快捷提问建议 */
-const suggestions = [
-  { icon: Sparkles, label: '帮我推荐', text: '请推荐知识库中值得重点阅读的内容' },
-  { icon: FileText, label: '帮我总结', text: '请总结知识库文档的核心观点' },
-  { icon: ListOrdered, label: '帮我写大纲', text: '请为知识库内容编写一份内容大纲' }
-]
-
-interface ChatInterfaceProps {
+import { useChatStore } from '../store/chatStore'
+import type { ChatMessage, ReferenceItem } from '../types'
+interface Props {
   messages: ChatMessage[]
   isStreaming: boolean
-  onSendMessage: (question: string, documentIds?: string[]) => void
+  onSendMessage: (question: string, knowledgeBaseId: number, topK: number) => void
   onStopStreaming: () => void
 }
-
-export function ChatInterface({
-  messages,
-  isStreaming,
-  onSendMessage,
-  onStopStreaming
-}: ChatInterfaceProps) {
-  const navigate = useNavigate()
+export function ChatInterface({ messages, isStreaming, onSendMessage, onStopStreaming }: Props) {
+  const isDeleting = useChatStore((state) => state.isDeleting)
   const [input, setInput] = useState('')
-  const [kbOpen, setKbOpen] = useState(false)
-  const [selectedDocIds, setSelectedDocIds] = useState<string[]>([])
-  const scrollRef = useRef<HTMLDivElement>(null)
-  const kbRef = useRef<HTMLDivElement>(null)
-  const { list: knowledgeBases } = useKnowledgeBases()
-  const [knowledgeBaseId, setKnowledgeBaseId] = useState<number | null>(null)
-  const { list: documents } = useDocuments(knowledgeBaseId)
-
+  const [topK, setTopK] = useState(4)
+  const end = useRef<HTMLDivElement>(null)
+  const knowledgeBaseId = useChatStore((state) => state.knowledgeBaseId)
+  const legacyHistory = useChatStore(
+    (state) => state.currentSessionId !== null && state.conversationSessionId === null
+  )
+  const query = useQuery({ queryKey: ['knowledge-bases', 'all'], queryFn: listAllKnowledgeBases })
+  const bases = query.data ?? []
+  const selected = bases.find((item) => item.id === knowledgeBaseId)
+  const canSend =
+    selected?.status === 'ACTIVE' &&
+    !legacyHistory &&
+    !isStreaming &&
+    !isDeleting &&
+    input.trim().length > 0 &&
+    topK >= 1 &&
+    topK <= 20 &&
+    Number.isInteger(topK)
   useEffect(() => {
-    if (knowledgeBases.length > 0 && !knowledgeBases.some((item) => item.id === knowledgeBaseId)) {
-      setKnowledgeBaseId(knowledgeBases[0].id)
-      setSelectedDocIds([])
-    }
-  }, [knowledgeBases, knowledgeBaseId])
-
-  useEffect(() => {
-    if (scrollRef.current) {
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight
-    }
+    end.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
-
-  // 点击面板外部时关闭知识库选择面板
-  useEffect(() => {
-    if (!kbOpen) return
-    const onClickOutside = (e: MouseEvent) => {
-      if (kbRef.current && !kbRef.current.contains(e.target as Node)) setKbOpen(false)
-    }
-    document.addEventListener('mousedown', onClickOutside)
-    return () => document.removeEventListener('mousedown', onClickOutside)
-  }, [kbOpen])
-
-  const handleSubmit = () => {
-    const trimmed = input.trim()
-    if (!trimmed || isStreaming) return
-    onSendMessage(trimmed, selectedDocIds.length > 0 ? selectedDocIds : undefined)
+  const submit = () => {
+    if (!canSend || knowledgeBaseId === null) return
+    onSendMessage(input.trim(), knowledgeBaseId, topK)
     setInput('')
   }
-
-  const handleFormSubmit = (e: React.FormEvent) => {
-    e.preventDefault()
-    handleSubmit()
-  }
-
-  const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    setInput(e.target.value)
-    // 自适应高度
-    const el = e.target
-    el.style.height = 'auto'
-    el.style.height = `${Math.min(el.scrollHeight, 160)}px`
-  }
-
-  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
-      e.preventDefault()
-      handleSubmit()
-    }
-  }
-
-  const toggleDoc = (id: string) => {
-    setSelectedDocIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]))
-  }
-
   return (
-    <div className="flex h-full flex-col">
-      {/* Messages */}
-      <ScrollArea className="flex-1" ref={scrollRef}>
+    <div className="flex h-full min-h-0 flex-col">
+      {legacyHistory && (
+        <div role="status" className="border-b p-3 text-sm">
+          此旧记录没有会话标识，仅供查看。
+          <Button variant="outline" size="sm" onClick={() => useChatStore.getState().newSession()}>
+            开始新对话
+          </Button>
+        </div>
+      )}
+      <header className="flex flex-wrap items-center gap-3 border-b p-3">
+        <label className="flex items-center gap-2 text-sm">
+          知识库
+          <select
+            aria-label="问答知识库"
+            className="bg-background max-w-64 rounded-md border p-2"
+            value={knowledgeBaseId ?? ''}
+            disabled={isStreaming || isDeleting || query.isLoading}
+            onChange={(event) =>
+              useChatStore
+                .getState()
+                .newSession(event.target.value ? Number(event.target.value) : null)
+            }
+          >
+            <option value="">请选择知识库</option>
+            {bases.map((base) => (
+              <option key={base.id} value={base.id} disabled={base.status !== 'ACTIVE'}>
+                {base.name}
+                {base.status !== 'ACTIVE' ? '（已停用）' : ''}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="flex items-center gap-2 text-sm">
+          TopK{' '}
+          <input
+            aria-label="检索片段数 TopK"
+            type="number"
+            min={1}
+            max={20}
+            step={1}
+            className="bg-background w-16 rounded-md border p-2"
+            value={topK}
+            disabled={isStreaming || isDeleting}
+            onChange={(event) => setTopK(Number(event.target.value))}
+          />
+        </label>
+        <span className="text-muted-foreground text-xs">切换知识库会开始新对话</span>
+        <Link className="text-primary ml-auto text-sm" to="/document/list">
+          管理知识库
+        </Link>
+      </header>
+      {query.isError && (
+        <div role="alert" className="text-destructive p-3 text-sm">
+          知识库加载失败{' '}
+          <Button variant="outline" size="sm" onClick={() => void query.refetch()}>
+            重试
+          </Button>
+        </div>
+      )}
+      <div className="min-h-0 flex-1 overflow-y-auto">
         <div className="mx-auto max-w-3xl space-y-6 px-4 py-6">
           {messages.length === 0 && (
-            <div className="flex flex-col items-center justify-center py-20 text-center">
-              <div className="bg-primary/10 mb-4 flex h-16 w-16 items-center justify-center rounded-2xl">
-                <BookOpen className="text-primary h-8 w-8" />
-              </div>
-              <h3 className="text-foreground text-lg font-semibold">RAG 智能问答</h3>
-              <p className="text-muted-foreground mt-2 max-w-sm text-sm">
-                基于知识库的智能问答，支持 Markdown 渲染、公式显示和溯源引用
+            <div className="flex flex-col items-center py-16 text-center">
+              <BookOpen className="text-primary mb-4 h-10 w-10" />
+              <h1 className="text-xl font-semibold">基于知识库，寻找可靠答案</h1>
+              <p className="text-muted-foreground mt-3 text-sm">
+                先选择已启用的知识库。问答按知识库隔离，支持多轮上下文与来源引用。
               </p>
+              {!query.isLoading && !bases.length && (
+                <Link className="text-primary mt-4 text-sm" to="/document/list">
+                  创建知识库并上传文档
+                </Link>
+              )}
             </div>
           )}
-          {messages.map((msg) => (
-            <div
-              key={msg.id}
-              className={cn('flex gap-3', msg.role === 'user' ? 'justify-end' : 'justify-start')}
+          {messages.map((message) => (
+            <article
+              key={message.id}
+              className={
+                message.role === 'user'
+                  ? 'bg-primary text-primary-foreground ml-auto max-w-[85%] rounded-xl p-4'
+                  : 'bg-muted/30 rounded-xl border p-4'
+              }
             >
-              {msg.role === 'assistant' && (
-                <div className="bg-primary/10 text-primary flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-semibold">
-                  AI
-                </div>
+              <p className="mb-2 text-xs opacity-60">
+                {message.role === 'user' ? '你' : '知识库助手'}
+              </p>
+              {message.role === 'assistant' ? (
+                <MarkdownRenderer
+                  content={message.content || (message.isStreaming ? '正在检索并生成…' : '')}
+                />
+              ) : (
+                <p className="whitespace-pre-wrap">{message.content}</p>
               )}
-              <div
-                className={cn(
-                  'max-w-[80%] rounded-2xl px-4 py-3',
-                  msg.role === 'user' ? 'bg-primary text-primary-foreground' : 'bg-muted'
-                )}
-              >
-                {msg.role === 'assistant' ? (
-                  <div>
-                    <MarkdownRenderer content={msg.content || '...'} />
-                    {msg.isStreaming && (
-                      <span className="bg-foreground/60 ml-0.5 inline-block h-4 w-2 animate-pulse align-middle" />
-                    )}
-                    {msg.references && msg.references.length > 0 && (
-                      <ReferencesPanel references={msg.references} />
-                    )}
-                  </div>
-                ) : (
-                  <p className="text-sm whitespace-pre-wrap">{msg.content}</p>
-                )}
-              </div>
-            </div>
+              {message.error && (
+                <p role="alert" className="text-destructive mt-3 text-sm">
+                  {message.error}
+                </p>
+              )}
+              {!!message.references?.length && <ReferencesPanel references={message.references} />}
+              {!message.references?.length && !!message.sourceDocumentIds?.length && (
+                <p className="text-muted-foreground mt-3 text-xs">
+                  历史引用文档 ID：{message.sourceDocumentIds.join('、')}（历史接口不返回片段正文）
+                </p>
+              )}
+              {message.isStreaming && <p className="text-muted-foreground mt-2 text-xs">生成中…</p>}
+            </article>
           ))}
-        </div>
-      </ScrollArea>
-
-      {/* 输入区域：卡片式 Composer */}
-      <div className="px-4 pt-2 pb-4">
-        <div className="mx-auto max-w-3xl">
-          <form onSubmit={handleFormSubmit}>
-            <div className="bg-background focus-within:border-foreground/25 rounded-2xl border shadow-sm transition-colors">
-              <textarea
-                value={input}
-                onChange={handleInputChange}
-                onKeyDown={handleKeyDown}
-                placeholder="向知识助手提问"
-                rows={2}
-                disabled={isStreaming}
-                className="placeholder:text-muted-foreground w-full resize-none bg-transparent px-4 pt-3.5 text-sm outline-none disabled:opacity-60"
-              />
-              {/* 底部工具行 */}
-              <div className="flex items-center gap-2 px-3 pb-3">
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon"
-                      className="text-muted-foreground h-8 w-8 rounded-full"
-                      onClick={() => navigate('/document/list')}
-                    >
-                      <Plus className="h-4 w-4" />
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent side="top">添加知识文档</TooltipContent>
-                </Tooltip>
-                {/* 知识库范围选择 */}
-                <div className="relative" ref={kbRef}>
-                  <button
-                    type="button"
-                    onClick={() => setKbOpen((v) => !v)}
-                    className={cn(
-                      'flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs transition-colors',
-                      selectedDocIds.length > 0
-                        ? 'border-foreground/30 bg-muted text-foreground'
-                        : 'border-border text-muted-foreground hover:text-foreground'
-                    )}
-                  >
-                    <Folder className="h-3.5 w-3.5" />
-                    {selectedDocIds.length > 0
-                      ? `已选 ${selectedDocIds.length} 篇文档`
-                      : '知识库选择'}
-                    <ChevronDown className="h-3 w-3" />
-                  </button>
-                  {kbOpen && (
-                    <div className="bg-popover absolute bottom-full left-0 z-20 mb-2 w-64 rounded-xl border p-1.5 shadow-md">
-                      <p className="text-muted-foreground px-2.5 py-1.5 text-xs">
-                        选择问答范围，不选则检索全部知识库
-                      </p>
-                      <ScrollArea className="max-h-56">
-                        <div className="space-y-0.5">
-                          {documents.map((opt) => {
-                            const id = String(opt.id)
-                            const checked = selectedDocIds.includes(id)
-                            return (
-                              <button
-                                key={opt.id}
-                                type="button"
-                                onClick={() => toggleDoc(id)}
-                                className="hover:bg-accent flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-xs transition-colors"
-                              >
-                                <span
-                                  className={cn(
-                                    'flex h-4 w-4 shrink-0 items-center justify-center rounded border',
-                                    checked
-                                      ? 'border-primary bg-primary text-primary-foreground'
-                                      : 'border-border'
-                                  )}
-                                >
-                                  {checked && <Check className="h-3 w-3" />}
-                                </span>
-                                <span className="min-w-0 flex-1 truncate">{opt.title}</span>
-                              </button>
-                            )
-                          })}
-                          {documents.length === 0 && (
-                            <p className="text-muted-foreground px-2.5 py-2 text-xs">
-                              暂无可选文档
-                            </p>
-                          )}
-                        </div>
-                      </ScrollArea>
-                    </div>
-                  )}
-                </div>
-                <div className="ml-auto">
-                  {isStreaming ? (
-                    <Button
-                      type="button"
-                      variant="destructive"
-                      size="icon"
-                      className="h-9 w-9 rounded-lg"
-                      onClick={onStopStreaming}
-                    >
-                      <Square className="h-4 w-4" />
-                    </Button>
-                  ) : (
-                    <Button
-                      type="submit"
-                      size="icon"
-                      className="h-9 w-9 rounded-lg"
-                      disabled={!input.trim()}
-                    >
-                      <Send className="h-4 w-4" />
-                    </Button>
-                  )}
-                </div>
-              </div>
-            </div>
-          </form>
-          {/* 快捷提问建议 */}
-          <div className="mt-3 flex items-center gap-5 px-1">
-            {suggestions.map((s) => (
-              <button
-                key={s.label}
-                type="button"
-                onClick={() => setInput(s.text)}
-                className="text-muted-foreground hover:text-foreground flex items-center gap-1 text-xs transition-colors"
-              >
-                <s.icon className="h-3.5 w-3.5" />
-                {s.label}
-              </button>
-            ))}
-          </div>
+          <div ref={end} />
         </div>
       </div>
+      <form
+        className="mx-auto w-full max-w-3xl space-y-2 p-4"
+        onSubmit={(event) => {
+          event.preventDefault()
+          submit()
+        }}
+      >
+        <textarea
+          aria-label="问题"
+          className="bg-background min-h-24 w-full resize-none rounded-xl border p-3 text-sm"
+          placeholder={
+            selected?.status === 'ACTIVE'
+              ? '输入问题，Enter 发送，Shift+Enter 换行'
+              : '请先选择已启用的知识库'
+          }
+          maxLength={2000}
+          value={input}
+          disabled={isStreaming || isDeleting}
+          onChange={(event) => setInput(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) {
+              event.preventDefault()
+              submit()
+            }
+          }}
+        />
+        <div className="flex items-center justify-between gap-2">
+          <span className="text-muted-foreground text-xs">
+            {input.length}/2000 · TopK 为 1–20 · 生成内容请结合来源核实
+          </span>
+          {isStreaming ? (
+            <Button type="button" variant="destructive" onClick={onStopStreaming}>
+              <Square className="h-4 w-4" />
+              停止生成
+            </Button>
+          ) : (
+            <Button type="submit" disabled={!canSend}>
+              <Send className="h-4 w-4" />
+              发送
+            </Button>
+          )}
+        </div>
+      </form>
     </div>
   )
 }
-
 function ReferencesPanel({ references }: { references: ReferenceItem[] }) {
-  const [expanded, setExpanded] = useState(false)
-
   return (
-    <div className="border-border/50 mt-3 border-t pt-3">
-      <button
-        onClick={() => setExpanded(!expanded)}
-        className="text-muted-foreground hover:text-foreground flex items-center gap-1 text-xs transition-colors"
-      >
-        <BookOpen className="h-3 w-3" />
-        引用来源 ({references.length})
-      </button>
-      {expanded && (
-        <div className="mt-2 space-y-2">
-          {references.map((ref, i) => (
-            <div key={i} className="bg-background/50 rounded-lg p-2 text-xs">
-              <p className="text-foreground font-medium">{ref.title}</p>
-              <p className="text-muted-foreground mt-1 line-clamp-2">{ref.snippet}</p>
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
+    <details className="mt-3 border-t pt-3 text-sm">
+      <summary className="cursor-pointer">引用来源（{references.length}）</summary>
+      <div className="mt-3 space-y-3">
+        {references.map((reference, i) => (
+          <div key={i} className="bg-background rounded-lg p-3">
+            <p className="font-medium">{reference.title}</p>
+            <p className="mt-1 text-xs whitespace-pre-wrap">{reference.snippet}</p>
+            {reference.score !== null && (
+              <p className="text-muted-foreground mt-1 text-xs">
+                检索距离：{reference.score.toFixed(4)}（越小越相关）
+              </p>
+            )}
+          </div>
+        ))}
+      </div>
+    </details>
   )
 }

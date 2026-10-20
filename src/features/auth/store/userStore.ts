@@ -25,33 +25,34 @@ export const useUserStore = create<UserState>()(
         set({
           token,
           userInfo,
-          isLogin: true,
+          isLogin: true
         })
       },
 
       logout: () => {
         storage.removeToken()
+        window.dispatchEvent(new Event('auth:logout'))
         set({
           token: null,
           userInfo: null,
-          isLogin: false,
+          isLogin: false
         })
       },
 
       updateUserInfo: (info) =>
         set((state) => ({
-          userInfo: state.userInfo ? { ...state.userInfo, ...info } : null,
-        })),
+          userInfo: state.userInfo ? { ...state.userInfo, ...info } : null
+        }))
     }),
     {
       name: 'rag-user-store',
       partialize: (state) => ({
         token: state.token,
         userInfo: state.userInfo,
-        isLogin: state.isLogin,
-      }),
-    },
-  ),
+        isLogin: state.isLogin
+      })
+    }
+  )
 )
 
 // 页面刷新后：将 persist 恢复的 token 回写 storage，保持两处一致

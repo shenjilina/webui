@@ -1,3 +1,4 @@
+import { collectPages } from '@/shared/utils/pagination'
 import { del, patch, post } from '@/shared/utils/http'
 import type {
   CreateKnowledgeBaseRequest,
@@ -41,4 +42,8 @@ export function updateKnowledgeBaseStatus(
 
 export function deleteKnowledgeBase(data: DeleteKnowledgeBaseRequest): Promise<void> {
   return del<void>('/knowledge-bases/delete', data)
+}
+
+export function listAllKnowledgeBases(): Promise<KnowledgeBase[]> {
+  return collectPages((page) => listKnowledgeBases({ page, pageSize: 100 }))
 }

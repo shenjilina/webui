@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { getDataTableValue } from './index'
+import { getDataTableValue } from './utils'
 
 describe('getDataTableValue', () => {
   it('reads the configured column accessor from a generic row', () => {

@@ -15,9 +15,8 @@ export async function startMockWorker(): Promise<void> {
   await worker.start({
     onUnhandledRequest: 'bypass',
     serviceWorker: {
-      url: '/mockServiceWorker.js',
-    },
+      url: '/mockServiceWorker.js'
+    }
   })
-  // eslint-disable-next-line no-console
   console.info('[MSW] Mock 服务已启动')
 }

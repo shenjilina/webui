@@ -107,7 +107,8 @@ export default function ProfilePage() {
                   type="password"
                   {...register('newPassword', {
                     required: '请输入新密码',
-                    minLength: { value: 6, message: '密码至少 6 位' }
+                    minLength: { value: 8, message: '密码至少 8 位' },
+                    maxLength: { value: 128, message: '密码最多 128 位' }
                   })}
                 />
                 {errors.newPassword && (

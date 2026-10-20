@@ -1,117 +1,69 @@
-import axios, { type AxiosError, type AxiosResponse, type InternalAxiosRequestConfig } from 'axios'
+import axios, { type AxiosError } from 'axios'
 import { toast } from 'sonner'
-import { API_BASE_URL, API_TIMEOUT } from '@/shared/utils/constants'
-import { storage } from '@/shared/utils/storage'
-
+import { API_BASE_URL, API_TIMEOUT } from './constants'
+import { storage } from './storage'
+import { getApiErrorMessage } from './apiError'
+import { handleUnauthorized } from './authEvents'
 export interface ApiResponse<T = unknown> {
   code: number
   message: string
   data: T
 }
-
 export interface PaginatedData<T> {
   list: T[]
   total: number
   page: number
   pageSize: number
 }
-
-interface ApiErrorDetail {
-  field?: string
-  message?: string
-}
-
-interface ApiErrorData {
-  errors?: ApiErrorDetail[]
-}
-
-function getApiErrorMessage(response: Partial<ApiResponse> | null | undefined): string {
-  const data = response?.data as ApiErrorData | null | undefined
-  const details = Array.isArray(data?.errors)
-    ? data.errors.map((item) => item.message?.trim()).filter(Boolean)
-    : []
-  return details.length > 0 ? details.join('；') : response?.message?.trim() || '请求失败'
-}
-
-let isHandling401 = false
-
 const http = axios.create({
   baseURL: API_BASE_URL,
   timeout: API_TIMEOUT,
   headers: { 'Content-Type': 'application/json' }
 })
-
-http.interceptors.request.use(
-  (config: InternalAxiosRequestConfig) => {
-    const token = storage.getToken()
-    if (token) config.headers.Authorization = `Bearer ${token}`
-    return config
-  },
-  (error: unknown) => Promise.reject(error)
-)
-
+http.interceptors.request.use((config) => {
+  const token = storage.getToken()
+  if (token) config.headers.Authorization = 'Bearer ' + token
+  return config
+})
 http.interceptors.response.use(
-  (response: AxiosResponse) => {
-    const data = response.data as ApiResponse
-    if (data.code !== 0) {
-      const message = getApiErrorMessage(data)
+  (response) => {
+    const body = response.data as ApiResponse
+    if (body.code !== 0) {
+      const message = getApiErrorMessage(body)
       toast.error(message)
       return Promise.reject(new Error(message))
     }
     return response
   },
-  (error: AxiosError<ApiResponse>) => {
-    if (!error.response) {
-      toast.error('网络请求失败')
-      return Promise.reject(error)
-    }
-
-    const { status, data } = error.response
-    const message = getApiErrorMessage(data)
-    if (status === 401) {
-      if (!isHandling401) {
-        isHandling401 = true
-        storage.clear()
-        window.dispatchEvent(new Event('auth:unauthorized'))
-        toast.error('登录已过期，请重新登录')
-        window.location.href = '/login'
-        setTimeout(() => {
-          isHandling401 = false
-        }, 1000)
-      }
-      return Promise.reject(new Error(message))
-    }
-
-    toast.error(message || `请求失败 (${status})`)
+  (error: AxiosError) => {
+    if (axios.isCancel(error)) return Promise.reject(error)
+    const message = error.response
+      ? getApiErrorMessage(error.response.data, '请求失败 (' + error.response.status + ')')
+      : '网络请求失败，请检查后端是否运行'
+    const isLoginRequest =
+      error.config?.url === '/auth/login' || error.config?.url === '/auth/register'
+    if (error.response?.status === 401 && !isLoginRequest) handleUnauthorized()
+    toast.error(message)
     return Promise.reject(new Error(message))
   }
 )
-
 export async function get<T>(url: string, params?: Record<string, unknown>): Promise<T> {
-  const res = await http.get<ApiResponse<T>>(url, { params })
-  return res.data.data
+  return (await http.get<ApiResponse<T>>(url, { params })).data.data
 }
-
 export async function post<T>(url: string, data?: unknown): Promise<T> {
-  const res = await http.post<ApiResponse<T>>(url, data, {
-    headers: data instanceof FormData ? { 'Content-Type': undefined } : undefined
-  })
-  return res.data.data
+  return (
+    await http.post<ApiResponse<T>>(url, data, {
+      headers: data instanceof FormData ? { 'Content-Type': undefined } : undefined
+    })
+  ).data.data
 }
-
 export async function put<T>(url: string, data?: unknown): Promise<T> {
-  const res = await http.put<ApiResponse<T>>(url, data)
-  return res.data.data
+  return (await http.put<ApiResponse<T>>(url, data)).data.data
 }
-
 export async function patch<T>(url: string, data?: unknown): Promise<T> {
-  const res = await http.patch<ApiResponse<T>>(url, data)
-  return res.data.data
+  return (await http.patch<ApiResponse<T>>(url, data)).data.data
 }
-
 export async function del<T>(url: string, data?: unknown): Promise<T> {
-  const res = await http.delete<ApiResponse<T>>(url, { data })
-  return res.data.data
+  return (await http.delete<ApiResponse<T>>(url, { data })).data.data
 }
-
 export default http

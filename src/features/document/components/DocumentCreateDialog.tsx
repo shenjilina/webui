@@ -1,5 +1,8 @@
 import { useEffect, useState } from 'react'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { FileUpload } from './FileUpload'
+import { listAllFiles } from '../api'
+import { useUserStore } from '@/features/auth/store/userStore'
 import { Button } from '@/shared/components/ui/button'
 import {
   Dialog,
@@ -11,99 +14,122 @@ import {
 import { Input } from '@/shared/components/ui/input'
 import { Label } from '@/shared/components/ui/label'
 import type { UploadedFile } from '../types'
-
-interface DocumentCreateDialogProps {
+interface Props {
   open: boolean
   submitting: boolean
   onOpenChange: (open: boolean) => void
   onSubmit: (values: { fileId: number; title: string; description: string }) => void
 }
-
-export function DocumentCreateDialog({
-  open,
-  submitting,
-  onOpenChange,
-  onSubmit
-}: DocumentCreateDialogProps) {
+export function DocumentCreateDialog({ open, submitting, onOpenChange, onSubmit }: Props) {
   const [title, setTitle] = useState('')
   const [description, setDescription] = useState('')
   const [fileList, setFileList] = useState<UploadedFile[]>([])
-  const [errors, setErrors] = useState({ title: '', description: '', file: '' })
+  const [error, setError] = useState('')
+  const userId = useUserStore((state) => state.userInfo?.id)
+  const client = useQueryClient()
+  const files = useQuery({ queryKey: ['files', userId], queryFn: listAllFiles, enabled: open })
   useEffect(() => {
-    if (!open) return
-    setTitle('')
-    setDescription('')
-    setFileList([])
-    setErrors({ title: '', description: '', file: '' })
-  }, [open])
-  const handleSubmit = () => {
-    const nextErrors = {
-      title: title.trim() ? '' : '请输入标题',
-      description: description.trim() ? '' : '请输入描述',
-      file: fileList.length > 0 ? '' : '请上传文件'
+    if (open) {
+      setTitle('')
+      setDescription('')
+      setFileList([])
+      setError('')
     }
-    setErrors(nextErrors)
-    if (Object.values(nextErrors).some(Boolean) || submitting) return
-    onSubmit({ fileId: fileList[0].fileId, title: title.trim(), description: description.trim() })
+  }, [open])
+  const submit = () => {
+    if (!fileList.length) {
+      setError('请选择已上传文件或上传新文件')
+      return
+    }
+    const effectiveTitle = title.trim() || fileList[0].filename
+    if (!effectiveTitle || effectiveTitle.length > 255 || description.length > 2000) {
+      setError('标题需为 1–255 字，描述最多 2000 字')
+      return
+    }
+    if (!submitting)
+      onSubmit({
+        fileId: fileList[0].fileId,
+        title: effectiveTitle,
+        description: description.trim()
+      })
   }
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog
+      open={open}
+      onOpenChange={(value) => {
+        if (!submitting) onOpenChange(value)
+      }}
+    >
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>新增文档</DialogTitle>
+          <DialogTitle>关联源文件，创建文档</DialogTitle>
         </DialogHeader>
         <div className="space-y-4">
           <div className="space-y-2">
-            <Label htmlFor="document-title">标题</Label>
+            <Label htmlFor="document-title">标题（留空使用文件名）</Label>
             <Input
               id="document-title"
               value={title}
-              required
-              aria-invalid={Boolean(errors.title)}
-              onChange={(event) => {
-                setTitle(event.target.value)
-                if (errors.title && event.target.value.trim()) {
-                  setErrors((current) => ({ ...current, title: '' }))
-                }
-              }}
-              placeholder="留空时使用文件名"
+              maxLength={255}
+              onChange={(e) => setTitle(e.target.value)}
+              disabled={submitting}
             />
-            {errors.title && <p className="text-destructive text-xs">{errors.title}</p>}
           </div>
           <div className="space-y-2">
-            <Label htmlFor="document-description">描述</Label>
+            <Label htmlFor="document-description">描述（可选）</Label>
             <textarea
               id="document-description"
-              className="border-input bg-background min-h-24 w-full rounded-md border px-3 py-2 text-sm"
+              className="bg-background min-h-20 w-full rounded-md border p-2 text-sm"
+              maxLength={2000}
               value={description}
-              required
-              aria-invalid={Boolean(errors.description)}
-              onChange={(event) => {
-                setDescription(event.target.value)
-                if (errors.description && event.target.value.trim()) {
-                  setErrors((current) => ({ ...current, description: '' }))
-                }
-              }}
+              onChange={(e) => setDescription(e.target.value)}
+              disabled={submitting}
             />
-            {errors.description && <p className="text-destructive text-xs">{errors.description}</p>}
           </div>
           <div className="space-y-2">
-            <Label>文件</Label>
+            <Label htmlFor="existing-file">选择已上传文件</Label>
+            <select
+              id="existing-file"
+              className="bg-background w-full rounded-md border p-2 text-sm"
+              disabled={submitting || files.isLoading}
+              value={fileList[0]?.fileId ?? ''}
+              onChange={(e) => {
+                const file = files.data?.find((item) => item.id === Number(e.target.value))
+                setFileList(file ? [{ fileId: file.id, filename: file.filename }] : [])
+              }}
+            >
+              <option value="">请选择文件</option>
+              {files.data
+                ?.filter((file) => file.storageStatus === 'PRESENT')
+                .map((file) => (
+                  <option key={file.id} value={file.id}>
+                    {file.filename}（#{file.id}）
+                  </option>
+                ))}
+            </select>
+            {files.isError && (
+              <p role="alert" className="text-destructive text-xs">
+                已有文件加载失败 <button onClick={() => void files.refetch()}>重试</button>
+              </p>
+            )}
+          </div>
+          {!submitting && (
             <FileUpload
               fileList={fileList}
-              onFileListChange={(files) => {
-                setFileList(files)
-                if (files.length > 0) setErrors((current) => ({ ...current, file: '' }))
+              onFileListChange={setFileList}
+              onUploaded={() => {
+                void client.invalidateQueries({ queryKey: ['files'] })
               }}
             />
-            {errors.file && <p className="text-destructive text-xs">{errors.file}</p>}
-          </div>
+          )}
+          {error && (
+            <p role="alert" className="text-destructive text-sm">
+              {error}
+            </p>
+          )}
           <DialogFooter>
-            <Button
-              onClick={handleSubmit}
-              disabled={submitting}
-            >
-              {submitting ? '提交中...' : '提交'}
+            <Button onClick={submit} disabled={submitting}>
+              {submitting ? '创建中…' : '创建文档'}
             </Button>
           </DialogFooter>
         </div>
